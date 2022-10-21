@@ -65,7 +65,6 @@ def main():
     # asking the user what folder want to use
     paths.name_folder_input = check_int(list_dir)
     paths.path_folder_input = list_dir + '/' + paths.name_folder_input
-
     if paths.name_folder_input == 'Bormann' or paths.name_folder_input == 'Bormann_furnitures':
         parameters_object.bormann = True
     else:
@@ -77,7 +76,7 @@ def main():
     # asking what map if is a single action
     if action == 'single action':
         # saving the output folder where the output is saved
-        make_folder('./data/OUTPUT', 'SINGLEMAP')
+        make_folder('data/OUTPUT', 'SINGLEMAP')
         paths.path_folder_output = './data/OUTPUT/SINGLEMAP'
         # asking what map to use
         paths.metric_map_name = check_int(paths.path_folder_input)
@@ -176,6 +175,7 @@ def start_main(action, parameters_object, paths):
         # ----------------------------------------------------------------
         for metric_map in glob.glob(paths.path_folder_input + '/*.png'):
             paths.metric_map_path = metric_map
+
             # windows
             # paths.metric_map_name = metric_map.split('\\')[-1][:-4]
             # linux
@@ -203,6 +203,7 @@ def start_main(action, parameters_object, paths):
     elif action == 'single action':
         # ----------------------------------------------------------------
         # making the log folder
+        print(paths.metric_map_path)
         paths.path_log_folder = os.path.join(paths.path_folder_output, paths.metric_map_name)
         make_folder(paths.path_folder_output, paths.metric_map_name)
         make_folder(paths.path_log_folder, running_time)

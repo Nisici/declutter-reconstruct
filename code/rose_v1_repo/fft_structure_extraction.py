@@ -17,8 +17,8 @@ from sklearn import mixture
 from sklearn.cluster import DBSCAN
 from sklearn.neighbors import KernelDensity
 
-import helpers as he
-import segment_handling as sh
+from rose_v1_repo import helpers as he
+import rose_v1_repo.segment_handling as sh
 
 
 def generate_line_segments_per_direction(slices):

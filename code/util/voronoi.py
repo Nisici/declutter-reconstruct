@@ -310,7 +310,8 @@ def compute_voronoi_graph(origin, param_obj, only_graph, name, bormann, filepath
 
     skeleton = skeletonize(input_skeleton)
     skeleton_object = skan.csr.Skeleton(skeleton)
-    pixel_graph, coordinates, degrees = skeleton_to_csgraph(skeleton)
+    #pixel_graph, coordinates, degrees = skeleton_to_csgraph(skeleton)
+    pixel_graph, coordinates = skeleton_to_csgraph(skeleton)
     io.imsave(filepath + 'degrees.png', skeleton_object.degrees_image)
 
     # -------------------------------GRAPH-------------------------------------

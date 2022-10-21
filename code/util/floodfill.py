@@ -4,7 +4,7 @@ from random import randint
 import cv2
 
 if __name__ == '__main__':
-    input_path = './../data/INPUT/gt_colored//'
+    input_path = '../data/INPUT/IMGs/gt_colored//'
     for map in os.listdir(input_path):
         output_path = input_path + map
         tmp = cv2.imread(input_path + map)

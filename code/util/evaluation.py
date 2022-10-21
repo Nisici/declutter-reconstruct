@@ -308,7 +308,7 @@ def main():
                  'map23', 'map_with_clutter', 'NOGT-intel_map', 'ubremen-cartesium-demo4', 'freiburg_building79']
     for map in map_names:
         output_path = './../data/OUTPUT/evaluation_borman/' + map
-        input_seg_path = './../data/INPUT/other_methods/'
+        input_seg_path = '../data/INPUT/IMGs/other_methods/'
         if not os.path.exists(output_path):
             os.mkdir(output_path)
         gt_map = './../data/INPUT/gt_colored/' + map + '.png'

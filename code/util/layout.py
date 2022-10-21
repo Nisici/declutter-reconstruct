@@ -33,9 +33,8 @@ def start_canny_and_hough(image, param_obj):
 
 	# hough
 	walls = cv2.HoughLinesP(image_3, param_obj.rho, param_obj.theta, param_obj.thresholdHough, param_obj.minLineLength, param_obj.maxLineGap)
-
 	 # TODO upgrade this version.
-	if cv2.__version__[0] == '3':
+	if cv2.__version__[0] == '3' or cv2.__version__[0]=='4':
 		walls = [i[0]for i in walls]
 	elif cv2.__version__[0] == '2':
 		walls = walls[0]
@@ -72,8 +71,10 @@ def external_contour(img_rgb):
 	if cv2.__version__[0] == '3':
 		# finding all the contours of this image
 		img_contour, contours, hierarchy = cv2.findContours(thresh.copy(), cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+		print(type(contours))
 		# removing the external contour, the rectangular shape of the image
-		contours.pop(0)
+		#contours.remove(0)
+		#contours.pop(0)
 		# draw all this contours
 		img_contour = cv2.drawContours(img_contour.copy(), contours, -1, (0, 255, 0), 3, cv2.LINE_8)
 		# finding all the contours of this new image found with cv2.drawContours()
