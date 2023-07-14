@@ -63,8 +63,10 @@ def main():
     # taking all the folders inside the path INPUT/IMGs
     list_dir = './data/INPUT/IMGs'
     # asking the user what folder want to use
-    paths.name_folder_input = check_int(list_dir)
-    paths.path_folder_input = list_dir + '/' + paths.name_folder_input
+    t = list_dir + '/' + check_int(list_dir)
+    # asking the user what folder want to use
+    paths.name_folder_input = check_int(t)
+    paths.path_folder_input = t + '/' + paths.name_folder_input
     if paths.name_folder_input == 'Bormann' or paths.name_folder_input == 'Bormann_furnitures':
         parameters_object.bormann = True
     else:
@@ -225,6 +227,7 @@ def start_main(action, parameters_object, paths):
         minibatch.start_main(par, parameters_object, paths)
 
     # -------------------------------ENDING EXECUTION AND EVALUATION TIME------------------------------------
+
 
 
 if __name__ == '__main__':

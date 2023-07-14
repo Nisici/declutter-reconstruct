@@ -84,6 +84,30 @@ def draw_walls(walls, name, size, format=default_format, filepath='.'):
 	plt.savefig(title + format)
 	plt.savefig(title + normal_format)
 
+def draw_walls_clutter_map(walls, clutter_map, name, size, format=default_format, filepath='.'):
+	print(name)
+	fig, ax = setup_plot(size)
+	x_coordinates = []
+	y_coordinates = []
+	title = os.path.join(filepath, name)
+	img = np.zeros((size[1], size[0], 3), np.uint8)
+	img[:, :] = (255, 255, 255)
+	coords = np.argwhere(clutter_map == 255)
+	for x, y in coords:
+		img[x, y,:] = 0
+	ax.imshow(img)
+	for wall in walls:
+		x1 = wall.x1
+		x2 = wall.x2
+		y1 = wall.y1
+		y2 = wall.y2
+		x_coordinates.extend((x1, x2))
+		y_coordinates.extend((y1, y2))
+		ax.plot(x_coordinates, y_coordinates, color=np.random.rand(3, ), linewidth=1)
+		del x_coordinates[:]
+		del y_coordinates[:]
+	plt.savefig(title + format)
+	plt.savefig(title + normal_format)
 
 def draw_contour(vertices, name, size, format=default_format, filepath='.'):
 	# draw the external contour of the metric map
@@ -360,14 +384,17 @@ def draw_rooms(rooms, colors, name, size, format=default_format, filepath='.'):
 	img = np.zeros((size[1], size[0], 3), np.uint8)
 	img[:, :] = (255, 255, 255)
 	ax.imshow(img)
+	patches = []
 	for index, s in enumerate(rooms):
+		#costruisce un matplotlib.patches.PathPatch
 		f_patch = PolygonPatch(s, fc=new_colors[index], ec='none')
 		ax.add_patch(f_patch)
+		patches.append(f_patch)
 		# ax.set_xlim(x_min, x_max)
 		# ax.set_ylim(y_min, y_max)
 	plt.savefig(title + format)
 	plt.savefig(title + normal_format)
-	return fig, ax
+	return fig, ax, patches
 
 
 def draw_rooms_on_map(image, name, size, format=default_format, filepath='.'):

@@ -18,8 +18,9 @@ from object import Surface as fc
 from util import mean_shift as ms
 from util import rototranslation as rotot
 import os
+from skimage import io
 import numpy as np
-
+from matplotlib import pyplot as plt
 
 def start_canny_and_hough(image, param_obj):
 	image_2 = cv2.cvtColor(image.copy(), cv2.COLOR_BGR2GRAY)
@@ -64,23 +65,36 @@ def create_walls(lines):
 
 
 def external_contour(img_rgb):
-	# transforming the image in gray scale to use cv2 functions.
-	img_gray = cv2.cvtColor(img_rgb, cv2.COLOR_BGR2GRAY)
+	if len(img_rgb.shape) == 3:
+		# transforming the image in gray scale to use cv2 functions.
+		img_gray = cv2.cvtColor(img_rgb, cv2.COLOR_BGR2GRAY)
+	else:
+		img_gray = img_rgb.copy()
 	# highlighting all the pixels with value > 253
 	ret, thresh = cv2.threshold(img_gray.copy(), 253, 255, cv2.THRESH_BINARY_INV)
 	if cv2.__version__[0] == '3':
 		# finding all the contours of this image
 		img_contour, contours, hierarchy = cv2.findContours(thresh.copy(), cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-		print(type(contours))
 		# removing the external contour, the rectangular shape of the image
-		#contours.remove(0)
-		#contours.pop(0)
+		contours = list(contours)
+		contours.pop(0)
 		# draw all this contours
 		img_contour = cv2.drawContours(img_contour.copy(), contours, -1, (0, 255, 0), 3, cv2.LINE_8)
 		# finding all the contours of this new image found with cv2.drawContours()
 		img_contour, contours, hierarchy = cv2.findContours(img_contour, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+
+	elif cv2.__version__[0] == '4':
+		# finding all the contours of this image
+		contours, hierarchy = cv2.findContours(thresh.copy(), cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+		# removing the external contour, the rectangular shape of the image
+		contours = list(contours)
+		contours.pop(0)
+		# draw all this contours
+		img_contour = cv2.drawContours(thresh.copy(), contours, -1, (0, 255, 0), 3, cv2.LINE_8)
+		# finding all the contours of this new image found with cv2.drawContours()
+		contours, hierarchy = cv2.findContours(img_contour, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
 	else:
-		raise EnvironmentError('Opencv Version Error. You should have OpenCv 3.*')
+		raise EnvironmentError('Opencv Version Error. You should have OpenCv 3.* or Opencv 4.*')
 
 	contours = sorted(contours, key=cv2.contourArea, reverse=True)[:10]
 	contours_max = contours[1]

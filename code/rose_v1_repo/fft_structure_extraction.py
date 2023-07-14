@@ -17,7 +17,7 @@ from sklearn import mixture
 from sklearn.cluster import DBSCAN
 from sklearn.neighbors import KernelDensity
 
-from rose_v1_repo import helpers as he
+import rose_v1_repo.helpers as he
 import rose_v1_repo.segment_handling as sh
 
 
@@ -208,6 +208,7 @@ class FFTStructureExtraction:
             pairs = np.unique(np.sort(pairs), axis=0)
 
         amp = np.max(self.pol_h) - np.min(self.pol_h)
+        #main directions
         self.comp = list()
         for p in pairs:
             a = self.pol_h[p[0]]
@@ -216,7 +217,6 @@ class FFTStructureExtraction:
                 self.comp.append(p)
         print("OK ({0:.2f})".format(time.time() - t))
         print("Found directions.....{}".format(len(self.comp)))
-
         print("Score map.....", end="", flush=True)
         t = time.time()
         if not self.comp:
@@ -776,7 +776,6 @@ class FFTStructureExtraction:
     def report(self):
         for p in self.comp:
             print("dir:", self.angles[p[0]] * 180.0 / np.pi, self.angles[p[1]] * 180.0 / np.pi)
-
     def show(self, visualisation, path, shape, format='.png'):
         print("Generating visualisation.....", end="", flush=True)
         t = time.time()
@@ -898,7 +897,7 @@ class FFTStructureExtraction:
 
         if visualisation["Map Scored Good"]:
             fig, ax = plt.subplots(nrows=1, ncols=1)
-            ax.imshow(np.abs(self.map_scored_good), cmap="plasma")
+            ax.imshow(np.abs(self.map_scored_good), cmap = "plasma")
             ax.axis("off")
             name = "Map Scored Good"
             fig.canvas.set_window_title(name)

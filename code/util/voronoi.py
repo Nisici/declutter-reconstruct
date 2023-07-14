@@ -17,7 +17,11 @@ from skimage.util import invert
 
 from parameters import ParameterObj
 from util.disegna import setup_plot
-
+from util.disegna import draw_rooms
+from matplotlib.patches import PathPatch
+from  matplotlib.path import Path
+from descartes import PolygonPatch
+from shapely.geometry.polygon import Polygon
 
 def remove_2_neighbors(graph):
     old_edges = 0
@@ -310,8 +314,7 @@ def compute_voronoi_graph(origin, param_obj, only_graph, name, bormann, filepath
 
     skeleton = skeletonize(input_skeleton)
     skeleton_object = skan.csr.Skeleton(skeleton)
-    #pixel_graph, coordinates, degrees = skeleton_to_csgraph(skeleton)
-    pixel_graph, coordinates = skeleton_to_csgraph(skeleton)
+    pixel_graph, coordinates, degrees = skeleton_to_csgraph(skeleton)
     io.imsave(filepath + 'degrees.png', skeleton_object.degrees_image)
 
     # -------------------------------GRAPH-------------------------------------
@@ -547,11 +550,9 @@ def compute_side(a, b, point):
         return 0
 
 
-def voronoi_segmentation(voronoi_graph, coordinates, directions_orebro, im, ind, filepath='.'):
+def voronoi_segmentation(patches, colors, size,  voronoi_graph, coordinates, directions_orebro, im, ind, filepath='.'):
     # --------------------------INITIALIZATION--------------------------------
-
     true_rooms = Image.open(filepath + '8b_rooms_th1.png')
-
     colors_to_divide, label, voronoi_graph = labelling(voronoi_graph, coordinates, filepath=filepath)
 
     voronoi_graph = voronoi_graph.copy()
@@ -683,78 +684,12 @@ def voronoi_segmentation(voronoi_graph, coordinates, directions_orebro, im, ind,
                     draw.line((points[0], points[1]), fill=(0, 0, 0, 255), width=1)
                     tmp_room.save(filepath + 't_room.png')
 
-                    # get old color in grayscale for exception
-                    # tmp_room_gray_tmp = Image.open(filepath + 't_room.png').convert('L')
-                    # pix_data_tmp_gray_tmp = tmp_room_gray_tmp.load()
-                    # old_color = pix_data_tmp_gray_tmp[centers_node[v][0], centers_node[v][1]]
-
-                    # flood fill the 2 part of the room with 2 different color
-                    # tmp_room_gray = Image.open(filepath + 't_room.png')
-                    # data = segmentation.flood_fill(np.asarray(tmp_room_gray), (seed1[1], seed1[0]), 100, connectivity=1)
-                    # tmp_room_gray = Image.fromarray(data)
-                    # tmp_room_gray.save(filepath + 'tmp_room_gray1_' + str(ind) + '.png')
-                    # data = segmentation.flood_fill(np.asarray(tmp_room_gray), (seed2[1], seed2[0]), 200, connectivity=1)
-                    # tmp_room_gray = Image.fromarray(data)
-                    # tmp_room_gray.save(filepath + 'tmp_room_gray2_' + str(ind) + '.png')
-
                     # load image
                     original_room_image = Image.open(filepath + '8b_rooms_th1.png')
 
                     # setup 2 new color
                     color1 = (randint(0, 255), randint(0, 255), randint(0, 255), 255)
                     color2 = (randint(0, 255), randint(0, 255), randint(0, 255), 255)
-
-                    # node_exception = None
-                    # color_exception = None
-
-                    # check for exception in the image
-                    # for y in range(tmp_room.size[1]):
-                    # 	for x in range(tmp_room.size[0]):
-                    # 		pixel = tmp_room_gray.getpixel((x, y))
-                    # 		if pixel == 0:
-                    # 			if 1 < x < tmp_room.size[0] - 1 and 1 < y < tmp_room.size[1] - 1:
-                    # 				pixel1 = tmp_room_gray.getpixel((x + 1, y))
-                    # 				pixel2 = tmp_room_gray.getpixel((x - 1, y))
-                    # 				pixel3 = tmp_room_gray.getpixel((x, y + 1))
-                    # 				pixel4 = tmp_room_gray.getpixel((x, y - 1))
-                    # 				if pixel1 == old_color and (pixel2 == 100 or pixel2 == 200):
-                    # 					node_exception = (x + 1, y)
-                    # 					color_exception = pixel2
-                    # 				elif (pixel1 == 100 or pixel1 == 200) and pixel2 == old_color:
-                    # 					node_exception = (x - 1, y)
-                    # 					color_exception = pixel1
-                    # 				elif pixel3 == old_color and (pixel4 == 100 or pixel4 == 200):
-                    # 					node_exception = (x, y + 1)
-                    # 					color_exception = pixel4
-                    # 				elif (pixel3 == 100 or pixel3 == 200) and pixel4 == old_color:
-                    # 					node_exception = (x, y - 1)
-                    # 					color_exception = pixel3
-                    # 				else:
-                    # 					tmp_room_gray.putpixel((x, y), 255)
-
-                    # color image in the case of exception
-                    # if node_exception is not None:
-                    # 	data = segmentation.flood_fill(np.asarray(tmp_room_gray), (node_exception[1], node_exception[0]), color_exception, connectivity=1)
-                    # 	tmp_room_gray = Image.fromarray(data)
-                    # 	tmp_room_gray.save(filepath + 'tmp_room_gray_exception_' + str(ind) + '.png')
-                    # 	for y in range(tmp_room.size[1]):
-                    # 		for x in range(tmp_room.size[0]):
-                    # 			pixel = tmp_room_gray.getpixel((x, y))
-                    # 			if pixel == 100:
-                    # 				original_room_image.putpixel((x, y), color1)
-                    # 				if [x, y] in centers_node:
-                    # 					index = centers_node.index([x, y])
-                    # 					new_col[index] = color1
-                    # 			if pixel == 200:
-                    # 				original_room_image.putpixel((x, y), color2)
-                    # 				if [x, y] in centers_node:
-                    # 					index = centers_node.index([x, y])
-                    # 					new_col[index] = color2
-                    # 			if pixel == 0:
-                    # 				if color_exception == 100:
-                    # 					original_room_image.putpixel((x, y), color1)
-                    # 				if color_exception == 200:
-                    # 					original_room_image.putpixel((x, y), color2)
 
                     # color the image in normal case
                     for y in range(tmp_room.size[1]):
@@ -768,11 +703,9 @@ def voronoi_segmentation(voronoi_graph, coordinates, directions_orebro, im, ind,
                                         index = centers_node.index([x, y])
                                         new_col[index] = color1
                                 if side == -1:
-                                    original_room_image.putpixel((x, y), color2)
                                     if [x, y] in centers_node:
                                         index = centers_node.index([x, y])
                                         new_col[index] = color2
-
                     for i, c in enumerate(new_col):
                         if c == color:
                             for node in subgraphs[i]:
@@ -783,11 +716,19 @@ def voronoi_segmentation(voronoi_graph, coordinates, directions_orebro, im, ind,
                                 if pixel == color2:
                                     new_col[i] = color2
                                     break
-
                     # save final maps
                     original_room_image.save(filepath + '8b_rooms_th1.png')
                     original_room_image.save(filepath + '8b_rooms_th1' + str(ind) + '.png')
 
+
+
+def make_room(vertices):
+    return Polygon(vertices)
+
+def draw_patch(patch, name, colors, size, filepath):
+    l = [(x,y) for (x,y) in patch.get_path().vertices.astype('int')]
+    tmp_r = [make_room(l)]
+    draw_rooms(tmp_r, colors, name, size, filepath=filepath)
 
 if __name__ == '__main__':
     input_path = './../data/INPUT/IMGs/'

@@ -12,7 +12,9 @@ import util.postprocessing as post
 import util.voronoi as vr
 from object import Segment as sg, ExtendedSegment
 from object import Surface as Surface
-
+from shapely.geometry.polygon import Polygon
+from matplotlib import pyplot as plt
+import numpy as np
 import FFT_MQ as fft
 
 
@@ -29,24 +31,33 @@ def print_parameters(param_obj, path_obj):
 
 
 def final_routine(img_ini, param_obj, size, draw, extended_segments_th1_merged, ind, rooms_th1, filepath):
-    post.clear_rooms(filepath + '8b_rooms_th1.png', param_obj, rooms_th1)
-
+    #post.clear_rooms(filepath + '8b_rooms_th1.png', param_obj, rooms_th1)
     if draw.rooms_on_map:
         segmentation_map_path = dsg.draw_rooms_on_map(img_ini, '8b_rooms_th1_on_map', size, filepath=filepath)
-
+    """
     if draw.rooms_on_map_prediction:
         dsg.draw_rooms_on_map_prediction(img_ini, '8b_rooms_th1_on_map_prediction', size, filepath=filepath)
 
     if draw.rooms_on_map_lines:
         dsg.draw_rooms_on_map_plus_lines(img_ini, extended_segments_th1_merged, '8b_rooms_th1_on_map_th1' + str(ind), size,
                                          filepath=filepath)
-
+    """
     # -------------------------------------POST-PROCESSING------------------------------------------------
 
     segmentation_map_path_post, colors = post.oversegmentation(segmentation_map_path, param_obj.th_post, filepath=filepath)
     return segmentation_map_path_post, colors
 
-
+# map1 - map2
+# maps have to be binary (black and white) and of the same size
+def map_difference(map1, map2):
+    result = np.zeros(map1.shape)
+    for i in range(map1.shape[0]):
+        for j in range(map1.shape[1]):
+            if(map1[i,j] == 255 and map2[i,j] == 0):
+                result[i,j] = 255
+            else:
+                result[i,j] = 0
+    return result
 def start_main(par, param_obj, path_obj):
     param_obj.tab_comparison = [[''], ['precision_micro'], ['precision_macro'], ['recall_micro'], ['recall_macro'],
                                 ['iou_micro_mean_seg_to_gt'], ['iou_macro_seg_to_gt'], ['iou_micro_mean_gt_to_seg'],
@@ -55,7 +66,7 @@ def start_main(par, param_obj, path_obj):
 
     draw = par.ParameterDraw()
     filepath = path_obj.filepath
-
+    print(filepath)
     print_parameters(param_obj, path_obj)
 
     # ----------------------------1.0_LAYOUT OF ROOMS------------------------------------
@@ -90,9 +101,16 @@ def start_main(par, param_obj, path_obj):
         if draw.walls:
             # draw Segments
             dsg.draw_walls(walls, '3_Walls', size, filepath=filepath)
-
-
+            # ------------------------WALLS + CLUTTER MAP-------------------------------------------
+            clean_map = plt.imread(filepath + "OREBRO_" + str(param_obj.filter_level) + ".png")
+            print(clean_map.shape)
+            original_binary_map = cv2.bitwise_not(img_ini)
+            original_binary_map = cv2.cvtColor(original_binary_map, cv2.COLOR_RGB2GRAY)
+            clutter_map = map_difference(original_binary_map, clean_map)
+            plt.imsave(filepath + 'binaryOriginal.png', original_binary_map, cmap = 'gray')
+            dsg.draw_walls_clutter_map(walls, clutter_map, 'walls_and_clutter_map', size, filepath=filepath)
         lim1, lim2 = 300, 450
+        """""
         while not(lim1 <= len(walls) <= lim2):
             if param_obj.filter_level <= 0.12:
                 break
@@ -136,7 +154,7 @@ def start_main(par, param_obj, path_obj):
             if draw.walls:
                 # draw Segments
                 dsg.draw_walls(walls, '3_Walls', size, filepath=filepath)
-
+        """
         param_obj.set_filter_level(0.18)
 
 
@@ -182,7 +200,6 @@ def start_main(par, param_obj, path_obj):
 
     if draw.angular_cluster:
         dsg.draw_angular_clusters(angular_clusters, walls, '5a_angular_clusters', size, filepath=filepath)
-
     # -------------------------------------------------------------------------------------
 
     # ---------------1.5_SPATIAL CLUSTERS--------------------------------------------------
@@ -230,7 +247,6 @@ def start_main(par, param_obj, path_obj):
     # this is needed in order to maintain the extended lines of the offset STANDARD
     border_lines = lay.set_weight_offset(extended_segments_merged, xmax, xmin, ymax, ymin)
     extended_segments_th1_merged, ex_li_removed = sg.remove_less_representatives(extended_segments_merged, param_obj.th1)
-
     if draw.extended_lines:
         dsg.draw_extended_lines(extended_segments_merged, walls, '7a_extended_lines_merged', size,
                                 filepath=filepath + '/Extended_Lines')
@@ -272,7 +288,6 @@ def start_main(par, param_obj, path_obj):
         dsg.draw_edges(edges, walls, param_obj.threshold_edges, '7c_edges_weighted', size, filepath=filepath + '/Edges')
         dsg.draw_edges(edges_th1, walls, -1, '7c_edges_th1', size, filepath=filepath + '/Edges')
         dsg.draw_edges(edges_th1, walls, param_obj.threshold_edges, '7c_edges_th1_weighted', size, filepath=filepath + '/Edges')
-
     # -------------------------------------------------------------------------------------
 
     # ----------------------------1.9_CREATE CELLS-----------------------------------------
@@ -328,35 +343,32 @@ def start_main(par, param_obj, path_obj):
 
     if draw.sides:
         dsg.draw_sides(edges_th1, '14a_sides_th1', size, filepath=filepath)
-
     if draw.rooms:
-        dsg.draw_rooms(rooms_th1, colors_th1, '8b_rooms_th1', size, filepath=filepath)
+        fig, ax, patches = dsg.draw_rooms(rooms_th1, colors_th1, '8b_rooms_th1', size, filepath=filepath)
 
-    if draw.cells_in_out:
-        dsg.draw_cells(cells_polygons_th1, polygon_out_th1, polygon_partial_th1, '8a_cells_in_out_partial_th1_post', size, filepath=filepath)
-
+    print(len(rooms_th1))
     # ---------------------------------END LAYOUT------------------------------------------
 
     ind = 0
 
-    segmentation_map_path_post, colors = final_routine(img_ini, param_obj, size, draw,
+    segmentation_map_path_post, colors = final_routine( img_ini, param_obj, size, draw,
                                                        extended_segments_th1_merged, ind, rooms_th1, filepath=filepath)
     old_colors = []
     voronoi_graph, coordinates = vr.compute_voronoi_graph(path_obj.metric_map_path, param_obj,
                                                           False, '', param_obj.bormann, filepath=filepath)
+    print(patches)
     while old_colors != colors and ind < param_obj.iterations:
         ind += 1
         old_colors = colors
-        vr.voronoi_segmentation(voronoi_graph, coordinates, param_obj.comp, path_obj.metric_map_path, ind, filepath=filepath)
-
+        vr.voronoi_segmentation(patches, colors_th1, size, voronoi_graph, coordinates, param_obj.comp, path_obj.metric_map_path, ind, filepath=filepath)
         segmentation_map_path_post, colors = final_routine(img_ini, param_obj, size, draw,
                                                            extended_segments_th1_merged, ind, rooms_th1, filepath=filepath)
-    # -------------------------------------EVALUATION------------------------------------------------
-
-    if os.path.exists(path_obj.gt_color):
-        eval.evaluate_bormann(path_obj.metric_map_name, path_obj.name_folder_input, param_obj)
-        eval.evaluation(path_obj.gt_color, segmentation_map_path_post, param_obj, '4 geometric', True, filepath)
-
+    rooms_th1 = make_rooms(patches)
+    colors_final = []
+    print(len(rooms_th1))
+    for r in rooms_th1:
+        colors_final.append(0)
+    dsg.draw_rooms(rooms_th1, colors_final, '8b_rooms_th1_final', size, filepath=filepath)
     # -------------------------------------------------------------------------------------
 
     end_time_main = time.time()
@@ -366,3 +378,9 @@ def start_main(par, param_obj, path_obj):
 
     with open(time_file, 'w+') as TIMEFILE:
         print("time for main is: ", end_time_main - start_time_main, file=TIMEFILE)
+
+def make_rooms(patches):
+    l = []
+    for p in patches:
+        l.append(Polygon(p.get_path().vertices))
+    return l
