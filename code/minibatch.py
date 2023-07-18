@@ -243,7 +243,7 @@ def start_main(par, param_obj, path_obj):
     extended_segments = sg.set_weights(extended_segments, walls)
     # this is used to merge together the extended_segments that are very close each other.
     extended_segments_merged = ExtendedSegment.merge_together(extended_segments, param_obj.distance_extended_segment, walls)
-    extended_segments_merged = sg.set_weights(extended_segments_merged, walls)
+    extended_segments_merged = sg.set_weights(extended_segments_merged, walls, size, True, filepath)
     # this is needed in order to maintain the extended lines of the offset STANDARD
     border_lines = lay.set_weight_offset(extended_segments_merged, xmax, xmin, ymax, ymin)
     extended_segments_th1_merged, ex_li_removed = sg.remove_less_representatives(extended_segments_merged, param_obj.th1)

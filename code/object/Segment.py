@@ -3,7 +3,8 @@ import numpy as np
 import math
 
 from object.ExtendedSegment import ExtendedSegment
-
+from matplotlib import pyplot as plt
+import util.disegna as dsg
 
 class Segment(object):
 	def __init__(self, x1, y1, x2, y2):
@@ -332,13 +333,14 @@ def set_weight_offset_edges(border_lines, edges_th1):
 			edge.set_weight(1)
 
 
-def set_weights(edges, wall_list):
+def set_weights(edges, wall_list, size=0, draw = False, filepath = '.'):
 	# set weight to each edge.
 	# for each edge take walls with same spatial_cluster and projected them on extended segment with same spatial_cluster
 	# first of all delete all the projections included completely in other projections, then merge projections that are
 	# not completely overlapped. finally compute the percentage of edge covered by projections.
 	tmp = []
 	projections = []
+	walls_projections = []
 	for edge in edges:
 		spatial_cluster = edge.spatial_cluster
 		for wall in wall_list:
@@ -346,6 +348,10 @@ def set_weights(edges, wall_list):
 			if wall.spatial_cluster == spatial_cluster:
 				point1 = project_point(wall.x1, wall.y1, edge.x1, edge.y1, edge.x2, edge.y2)
 				point2 = project_point(wall.x2, wall.y2, edge.x1, edge.y1, edge.x2, edge.y2)
+
+				w = Segment(point1[0], point1[1], point2[0], point2[1])
+				walls_projections.append(w)
+
 				# add the points to tmp list, that will be ordered in order to have start < end
 				tmp.append(point1)
 				tmp.append(point2)
@@ -372,6 +378,8 @@ def set_weights(edges, wall_list):
 			# weight = 0.2
 		edge.set_weight(weight)
 		del projections[:]
+	if draw:
+		dsg.draw_walls(walls_projections, "wall_projections", size, filepath=filepath)
 	return edges
 
 
