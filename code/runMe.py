@@ -177,7 +177,6 @@ def start_main(action, parameters_object, paths):
         # ----------------------------------------------------------------
         for metric_map in glob.glob(paths.path_folder_input + '/*.png'):
             paths.metric_map_path = metric_map
-
             # windows
             # paths.metric_map_name = metric_map.split('\\')[-1][:-4]
             # linux
@@ -205,9 +204,8 @@ def start_main(action, parameters_object, paths):
     elif action == 'single action':
         # ----------------------------------------------------------------
         # making the log folder
-        print(paths.metric_map_path)
-        paths.path_log_folder = os.path.join(paths.path_folder_output, paths.metric_map_name)
-        make_folder(paths.path_folder_output, paths.metric_map_name)
+        paths.path_log_folder = os.path.join(paths.path_folder_output, paths.metric_map_name[:-4])
+        make_folder(paths.path_folder_output, paths.metric_map_name[:-4])
         make_folder(paths.path_log_folder, running_time)
         paths.filepath = paths.path_log_folder + '/' + running_time + '/'
         # copying the parameters file
