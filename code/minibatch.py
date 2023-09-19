@@ -4,7 +4,7 @@ import os
 import time
 
 import cv2
-
+import itertools
 import util.disegna as dsg
 import util.layout as lay
 import util.evaluation as eval
@@ -223,7 +223,6 @@ def start_main(par, param_obj, path_obj):
 
     # now we have a set of Segments with correct spatial cluster, now set the others with same wall_cluster
     spatial_clusters = lay.new_spatial_cluster(walls, representatives_segments, param_obj)
-
     if draw.spatial_wall_cluster:
         dsg.draw_spatial_wall_clusters(wall_clusters, walls, '5c_spatial_wall_cluster', size, filepath=filepath)
 
@@ -239,11 +238,48 @@ def start_main(par, param_obj, path_obj):
     if draw.extended_lines:
         make_folder(filepath, 'Extended_Lines')
         dsg.draw_extended_lines(extended_segments, walls, '7a_extended_lines', size, filepath=filepath + '/Extended_Lines')
+        # Create an empty mask with the same dimensions as the image
 
-    extended_segments = sg.set_weights(extended_segments, walls)
+
+#######DRAW WALLS WITH HOUGH AND MASK ORIGINAL IMAGE#########
+    mask = np.zeros_like(original_binary_map)
+    # Create a dictionary to associate each pixel with the wall that masked it
+    pixel_to_wall = {}
+    # Iterate through the detected lines and draw them on the mask while associating pixels
+    for wall in walls:
+        # Draw line segment on mask
+        cv2.line(mask, (int(wall.x1), int(wall.y1)), (int(wall.x2), int(wall.y2)), 255, 2)
+        # Iterate through the pixels covered by this line segment
+        for y in range(min(int(wall.y1), int(wall.y2)), max(int(wall.y1), int(wall.y2)) + 1):
+            for x in range(min(int(wall.x1), int(wall.x2)), max(int(wall.x1), int(wall.x2)) + 1):
+                if (mask[y, x] == 255) and (original_binary_map[y, x] == 255):
+                    pixel_to_wall[(x, y)] = wall
+
+    plt.imsave(filepath + 'mask.png', mask)
+    masked_image = cv2.bitwise_and(orebro_img, orebro_img, mask=mask)
+    cv2.imwrite(filepath + "masked_image.jpg", masked_image)
+    #DRAW HEATMAP OF WALL PROJECTIONS
+    extended_segments, walls_projections = sg.set_weights(extended_segments, walls)
+    sg.wall_projections_heat_map(walls_projections, pixel_to_wall, filepath, original_binary_map, 'heatmap')
+    dsg.draw_walls(walls_projections, "wall_projections", size, filepath=filepath)
     # this is used to merge together the extended_segments that are very close each other.
     extended_segments_merged = ExtendedSegment.merge_together(extended_segments, param_obj.distance_extended_segment, walls)
-    extended_segments_merged = sg.set_weights(extended_segments_merged, walls, size, True, filepath)
+    extended_segments_merged, walls_projections_merged = sg.set_weights(extended_segments_merged, walls)
+    dsg.draw_walls(walls_projections_merged, "wall_projections_merged", size, filepath=filepath)
+    sg.wall_projections_heat_map(walls_projections_merged, pixel_to_wall, filepath, original_binary_map, 'heatmap_merged')
+    #draw on original binary image the corrected map removing the initial walls pixels and drawing the pixels belonging to
+    # wall projections
+    """"
+    dsg.draw_hough_black(original_binary_map, lines, 'removedBadPixelsOriginal', size, filepath=filepath)
+    dsg.draw_hough_black(orebro_img, lines, 'removedBadPixelsClean', size, filepath=filepath)
+    correctedOriginal = plt.imread(filepath + 'removedBadPixelsOriginal.png')
+    correctedClean = plt.imread(filepath + 'removedBadPixelsClean.png')
+    correctedOriginal = cv2.cvtColor(correctedOriginal, cv2.COLOR_RGB2GRAY)
+    correctedClean = cv2.cvtColor(correctedClean, cv2.COLOR_RGB2GRAY)
+    dsg.draw_hough_segment_white(correctedOriginal, walls_projections, 'correctedOriginal', size, filepath=filepath)
+    dsg.draw_hough_segment_white(correctedClean, walls_projections, 'correctedClean', size, filepath=filepath)
+    """
+
     # this is needed in order to maintain the extended lines of the offset STANDARD
     border_lines = lay.set_weight_offset(extended_segments_merged, xmax, xmin, ymax, ymin)
     extended_segments_th1_merged, ex_li_removed = sg.remove_less_representatives(extended_segments_merged, param_obj.th1)
@@ -257,7 +293,7 @@ def start_main(par, param_obj, path_obj):
         if short_line is not None:
             lis.append(short_line)
 
-    lis = sg.set_weights(lis, walls)
+    lis, _ = sg.set_weights(lis, walls)
     lis, _ = sg.remove_less_representatives(lis, 0.1)
     for el in lis:
         extended_segments_th1_merged.append(el)
@@ -279,8 +315,8 @@ def start_main(par, param_obj, path_obj):
 
     # ---------------------------1.8_SET EDGES WEIGHTS-------------------------------------
 
-    edges = sg.set_weights(edges, walls)
-    edges_th1 = sg.set_weights(edges_th1, walls)
+    edges, _ = sg.set_weights(edges, walls)
+    edges_th1, _ = sg.set_weights(edges_th1, walls)
 
     if draw.edges:
         make_folder(filepath, 'Edges')
@@ -384,3 +420,76 @@ def make_rooms(patches):
     for p in patches:
         l.append(Polygon(p.get_path().vertices))
     return l
+def createLineIterator(P1, P2, img):
+    """
+    Produces and array that consists of the coordinates and intensities of each pixel in a line between two points
+
+    Parameters:
+        -P1: a numpy array that consists of the coordinate of the first point (x,y)
+        -P2: a numpy array that consists of the coordinate of the second point (x,y)
+        -img: the image being processed
+
+    Returns:
+        -it: a numpy array that consists of the coordinates and intensities of each pixel in the radii (shape: [numPixels, 3], row = [x,y,intensity])
+    """
+    #define local variables for readability
+    imageH = img.shape[0]
+    imageW = img.shape[1]
+    P1X = P1[0]
+    P1Y = P1[1]
+    P2X = P2[0]
+    P2Y = P2[1]
+
+    #difference and absolute difference between points
+    #used to calculate slope and relative location between points
+    dX = P2X - P1X
+    dY = P2Y - P1Y
+    dXa = np.abs(dX)
+    dYa = np.abs(dY)
+
+    #predefine numpy array for output based on distance between points
+    itbuffer = np.empty(shape=(np.maximum(dYa,dXa),3),dtype=np.float32)
+    itbuffer.fill(np.nan)
+
+    #Obtain coordinates along the line using a form of Bresenham's algorithm
+    negY = P1Y > P2Y
+    negX = P1X > P2X
+    if P1X == P2X: #vertical line segment
+       itbuffer[:,0] = P1X
+       if negY:
+           itbuffer[:,1] = np.arange(P1Y - 1,P1Y - dYa - 1,-1)
+       else:
+           itbuffer[:,1] = np.arange(P1Y+1,P1Y+dYa+1)
+    elif P1Y == P2Y: #horizontal line segment
+       itbuffer[:,1] = P1Y
+       if negX:
+           itbuffer[:,0] = np.arange(P1X-1,P1X-dXa-1,-1)
+       else:
+           itbuffer[:,0] = np.arange(P1X+1,P1X+dXa+1)
+    else: #diagonal line segment
+       steepSlope = dYa > dXa
+       if steepSlope:
+           slope = dX.astype(np.float32)/dY.astype(np.float32)
+           if negY:
+               itbuffer[:,1] = np.arange(P1Y-1,P1Y-dYa-1,-1)
+           else:
+               itbuffer[:,1] = np.arange(P1Y+1,P1Y+dYa+1)
+           itbuffer[:,0] = (slope*(itbuffer[:,1]-P1Y)).astype(np.int) + P1X
+       else:
+           slope = dY.astype(np.float32)/dX.astype(np.float32)
+           if negX:
+               itbuffer[:,0] = np.arange(P1X-1,P1X-dXa-1,-1)
+           else:
+               itbuffer[:,0] = np.arange(P1X+1,P1X+dXa+1)
+           itbuffer[:,1] = (slope*(itbuffer[:,0]-P1X)).astype(np.int) + P1Y
+
+    #Remove points outside of image
+    colX = itbuffer[:,0]
+    colY = itbuffer[:,1]
+    itbuffer = itbuffer[(colX >= 0) & (colY >=0) & (colX<imageW) & (colY<imageH)]
+
+    #Get intensities from img ndarray
+    #itbuffer[:,2] = img[itbuffer[:,1].astype(np.uint),itbuffer[:,0].astype(np.uint)]
+    itbuffer[:, 2] = 255
+    return itbuffer
+

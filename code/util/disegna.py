@@ -61,6 +61,31 @@ def draw_hough(image, walls, name, size, format=default_format, filepath='.'):
 	plt.savefig(title + format)
 	plt.savefig(title + normal_format)
 
+def draw_hough_black(image, walls, name, size, format=default_format, filepath='.'):
+	print(name)
+	fig, ax = setup_plot(size)
+	title = os.path.join(filepath, name)
+	img = image.copy()
+	if len(img.shape) == 2:
+		img = cv2.cvtColor(img, cv2.COLOR_GRAY2RGB)
+	for x1, y1, x2, y2 in walls:
+		cv2.line(img, (x1, y1), (x2, y2), (0, 0, 0), 2)
+	ax.imshow(img, cmap='Greys')
+	plt.savefig(title + format)
+	plt.savefig(title + normal_format)
+
+def draw_hough_segment_white(image, walls_projections, name, size, format=default_format, filepath='.'):
+	print(name)
+	fig, ax = setup_plot(size)
+	title = os.path.join(filepath, name)
+	img = image.copy()
+	if len(img.shape) == 2:
+		img = cv2.cvtColor(img, cv2.COLOR_GRAY2RGB)
+	for w in walls_projections:
+		cv2.line(img, (int(w.x1), int(w.y1)), (int(w.x2), int(w.y2)), (255, 255, 255), 2)
+	ax.imshow(img, cmap='Greys')
+	plt.savefig(title + format)
+	plt.savefig(title + normal_format)
 
 def draw_walls(walls, name, size, format=default_format, filepath='.'):
 	print(name)

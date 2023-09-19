@@ -5,7 +5,7 @@ import math
 from object.ExtendedSegment import ExtendedSegment
 from matplotlib import pyplot as plt
 import util.disegna as dsg
-
+import cv2
 class Segment(object):
 	def __init__(self, x1, y1, x2, y2):
 		self.x1 = x1
@@ -333,7 +333,7 @@ def set_weight_offset_edges(border_lines, edges_th1):
 			edge.set_weight(1)
 
 
-def set_weights(edges, wall_list, size=0, draw = False, filepath = '.'):
+def set_weights(edges, wall_list):
 	# set weight to each edge.
 	# for each edge take walls with same spatial_cluster and projected them on extended segment with same spatial_cluster
 	# first of all delete all the projections included completely in other projections, then merge projections that are
@@ -349,9 +349,6 @@ def set_weights(edges, wall_list, size=0, draw = False, filepath = '.'):
 				point1 = project_point(wall.x1, wall.y1, edge.x1, edge.y1, edge.x2, edge.y2)
 				point2 = project_point(wall.x2, wall.y2, edge.x1, edge.y1, edge.x2, edge.y2)
 
-				w = Segment(point1[0], point1[1], point2[0], point2[1])
-				walls_projections.append(w)
-
 				# add the points to tmp list, that will be ordered in order to have start < end
 				tmp.append(point1)
 				tmp.append(point2)
@@ -361,9 +358,11 @@ def set_weights(edges, wall_list, size=0, draw = False, filepath = '.'):
 				# add projection x1,y1,x2,y2 only if is not already inside (avoid copy that cause trouble when deleting
 				# projections included in others)
 				if not already_inside_segment(tmp2, projections):
-					projections.append(tmp2)
+					#projections also need the spatial cluster
+					projections.append((tmp2, spatial_cluster))
 				del tmp[:]
 		# remove projections included in others
+		#BISOGNA TOGLIERE ANCHE SPATIAL CLUSTER
 		projections[:] = [tup for tup in projections if not included(tup, projections)]
 		# merge of projections that intersect each other
 		merged = merge_overlapped(projections)
@@ -377,11 +376,48 @@ def set_weights(edges, wall_list, size=0, draw = False, filepath = '.'):
 			weight = coverage / length(edge.x1, edge.y1, edge.x2, edge.y2)
 			# weight = 0.2
 		edge.set_weight(weight)
+		for p in projections:
+			proj = p[0]
+			w = Segment(proj[0], proj[1], proj[2], proj[3])
+			w.spatial_cluster = p[1]
+			walls_projections.append(w)
 		del projections[:]
-	if draw:
-		dsg.draw_walls(walls_projections, "wall_projections", size, filepath=filepath)
-	return edges
+	return edges, walls_projections
 
+#problem: heatmap looks inconsistent with wall_projections image, some walls should be red but they are blue why?
+# looks like it happens if you lower the sogliaCluesterMura. Some wall projections are not considered?
+def wall_projections_heat_map(walls_projections, pixel_to_wall, filepath, original_map, name):
+	def distance_point_line(line, point_x, point_y):
+		return np.abs(
+			(line.y1 - line.y2) * point_x - (line.x1 - line.x2) * point_y + line.x1 * line.y2 - line.y1 * line.x2) / np.sqrt(
+			(line.y1 - line.y2) ** 2 + (line.x1 - line.x2) ** 2
+		)
+	max_distance = 0
+	heatmapOriginal = original_map.copy()
+	heatmapOriginal = cv2.cvtColor(heatmapOriginal, cv2.COLOR_GRAY2RGB)
+	for (x, y), wall in pixel_to_wall.items():
+		# Get the associated line
+		#there are more than one wall projection for spatial cluster but they have the same value(?) why
+		line = [h for h in walls_projections if h.spatial_cluster == wall.spatial_cluster][0]
+		# Calculate the distance of the pixel from the line using the point-line distance formula
+		distance = distance_point_line(line, x, y)
+		# Update max_distance if the current distance is greater
+		if distance > max_distance :
+			max_distance = distance
+	colormap = plt.get_cmap('jet')
+	colormap = colormap.reversed()
+	heatmap = np.zeros_like(original_map, shape=(original_map.shape[0], original_map.shape[1], 3))
+	for (x, y), wall in pixel_to_wall.items():
+		line = [h for h in walls_projections if h.spatial_cluster == wall.spatial_cluster][0]
+		distance = distance_point_line(line, x, y)
+		# Map the distance to a color in the colormap
+		normalized = distance/max_distance
+		color = colormap(normalized)
+		# Set the color in the heatmap
+		heatmapOriginal[y, x] = (color[0]*255, color[1]*255, color[2]*255)
+		heatmap[y, x] = (color[0]*255, color[1]*255, color[2]*255)
+	plt.imsave(filepath + name + '.png', heatmap)
+	plt.imsave(filepath + name + '_on_original.png', heatmapOriginal)
 
 def project_point(x1, y1, x2, y2, x3, y3):
 	# given the segment with extreme x2,y2 and x3,y3, project the point1 on segment
@@ -411,11 +447,13 @@ def already_inside_segment(seg, projections):
 
 def included(seg1, segment_list):
 	# return true if the segment is included in another segment of list
+	seg1 = seg1[0]
 	x1 = seg1[0]
 	y1 = seg1[1]
 	x2 = seg1[2]
 	y2 = seg1[3]
 	for seg2 in segment_list:
+		seg2 = seg2[0]
 		if seg1 != seg2:
 			x3 = seg2[0]
 			y3 = seg2[1]
@@ -434,11 +472,15 @@ def merge_overlapped(projections):
 	# return 1 if every time that 2 projections are partially overlapped, it will be created and added the union.
 	# and the 2 projections are deleted from list of projections.
 	for seg1 in projections:
+		spatial_cluster1 = seg1[1]
+		seg1 = seg1[0]
 		x1 = seg1[0]
 		y1 = seg1[1]
 		x2 = seg1[2]
 		y2 = seg1[3]
 		for seg2 in projections:
+			spatial_cluster2 = seg2[1]
+			seg2 = seg2[0]
 			if seg1 != seg2:
 				x3 = seg2[0]
 				y3 = seg2[1]
@@ -446,15 +488,15 @@ def merge_overlapped(projections):
 				y4 = seg2[3]
 				if(x1 == x2 == x3 == x4) and (y1 < y3) and (y3 <= y2 < y4):
 					union = [x1, y1, x2, y4]
-					projections.append(union)
-					projections.remove(seg1)
-					projections.remove(seg2)
+					projections.append((union, spatial_cluster1))
+					projections.remove((seg1, spatial_cluster1))
+					projections.remove((seg2, spatial_cluster2))
 					return 1
 				if(x1 < x3) and (x3 <= x2 < x4):
 					union = [x1, y1, x4, y4]
-					projections.append(union)
-					projections.remove(seg1)
-					projections.remove(seg2)
+					projections.append((union, spatial_cluster1))
+					projections.remove((seg1, spatial_cluster1))
+					projections.remove((seg2, spatial_cluster2))
 					return 1
 	return 0
 
@@ -467,6 +509,7 @@ def compute_coverage(edge, projections):
 	y2 = edge.y2
 	coverage = 0
 	for segment in projections:
+		segment = segment[0]
 		x3 = segment[0]
 		y3 = segment[1]
 		x4 = segment[2]

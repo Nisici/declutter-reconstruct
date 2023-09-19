@@ -9,7 +9,7 @@ from fft_structure_extraction import FFTStructureExtraction as structure_extract
 import fft_structure_extraction
 
 
-def main(path_to_image, path_to_folder, filter_level, par):
+def main(path_to_image, path_to_folder, filter_level):
     # FFT
 
     grid_map = img_as_ubyte(io.imread(path_to_image))
@@ -34,6 +34,7 @@ def main(path_to_image, path_to_folder, filter_level, par):
     for p in rose.comp:
         p0 = rose.angles[p[0]]
         p1 = rose.angles[p[1]]
+        print(p0, p1)
         p0 += np.pi/2
         p1 += np.pi/2
         p0 = p0 % (2*np.pi)
@@ -42,8 +43,8 @@ def main(path_to_image, path_to_folder, filter_level, par):
         p1 = np.pi - p1
         comp.append(p0)
         comp.append(p1)
-    par.comp = comp
-
+    #par.comp = comp
+    print(comp)
     visualisation = {"Binary map": False,
                      "FFT Spectrum": False,
                      "Unfolded FFT Spectrum": False,
@@ -78,9 +79,9 @@ def main(path_to_image, path_to_folder, filter_level, par):
     rose.show(visualisation, path_to_folder, rose.shape)
 
 
-# if __name__ == "__main__":
-#     # parse input
-#     parser = argparse.ArgumentParser()
-#     parser.add_argument('img_file', help='Path to the map')
-#     args = parser.parse_args()
-#     main(args, '')
+if __name__ == "__main__":
+      # parse input
+     parser = argparse.ArgumentParser()
+     parser.add_argument('img_file', help='Path to the map')
+     args = parser.parse_args()
+     main('map3.png', '',0.18)
