@@ -4,7 +4,6 @@ import os
 import time
 
 import cv2
-import itertools
 import util.disegna as dsg
 import util.layout as lay
 import util.evaluation as eval
@@ -16,7 +15,7 @@ from shapely.geometry.polygon import Polygon
 from matplotlib import pyplot as plt
 import numpy as np
 import FFT_MQ as fft
-
+import util.map_evaluation as mp
 
 def make_folder(location, folder_name):
     if not os.path.exists(location + '/' + folder_name):
@@ -101,14 +100,9 @@ def start_main(par, param_obj, path_obj):
         if draw.walls:
             # draw Segments
             dsg.draw_walls(walls, '3_Walls', size, filepath=filepath)
-            # ------------------------WALLS + CLUTTER MAP-------------------------------------------
-            clean_map = plt.imread(filepath + "OREBRO_" + str(param_obj.filter_level) + ".png")
-            print(clean_map.shape)
+            # BINARY MAP
             original_binary_map = cv2.bitwise_not(img_ini)
             original_binary_map = cv2.cvtColor(original_binary_map, cv2.COLOR_RGB2GRAY)
-            clutter_map = map_difference(original_binary_map, clean_map)
-            plt.imsave(filepath + 'binaryOriginal.png', original_binary_map, cmap = 'gray')
-            dsg.draw_walls_clutter_map(walls, clutter_map, 'walls_and_clutter_map', size, filepath=filepath)
         lim1, lim2 = 300, 450
         """""
         while not(lim1 <= len(walls) <= lim2):
@@ -155,7 +149,6 @@ def start_main(par, param_obj, path_obj):
                 # draw Segments
                 dsg.draw_walls(walls, '3_Walls', size, filepath=filepath)
         """
-        param_obj.set_filter_level(0.18)
 
 
     # ------------1.2_SET XMIN, YMIN, XMAX, YMAX OF walls-----------------------------------
@@ -195,9 +188,7 @@ def start_main(par, param_obj, path_obj):
     # ---------------1.4_MEAN SHIFT TO FIND ANGULAR CLUSTERS-------------------------------
 
     indexes, walls, angular_clusters = lay.cluster_ang(param_obj.h, param_obj.minOffset, walls, diagonals=param_obj.diagonals)
-
     angular_clusters = lay.assign_orebro_direction(param_obj.comp, walls)
-
     if draw.angular_cluster:
         dsg.draw_angular_clusters(angular_clusters, walls, '5a_angular_clusters', size, filepath=filepath)
     # -------------------------------------------------------------------------------------
@@ -255,20 +246,18 @@ def start_main(par, param_obj, path_obj):
                 if (mask[y, x] == 255) and (original_binary_map[y, x] == 255):
                     pixel_to_wall[(x, y)] = wall
 
-    plt.imsave(filepath + 'mask.png', mask)
     masked_image = cv2.bitwise_and(orebro_img, orebro_img, mask=mask)
     cv2.imwrite(filepath + "masked_image.jpg", masked_image)
     #DRAW HEATMAP OF WALL PROJECTIONS
     extended_segments, walls_projections = sg.set_weights(extended_segments, walls)
-    sg.wall_projections_heat_map(walls_projections, pixel_to_wall, filepath, original_binary_map, 'heatmap')
+    mp.distance_heat_map(walls_projections, pixel_to_wall, filepath, original_binary_map, 'distance_heatmap')
+    mp.angular_heatmap(walls_projections, pixel_to_wall, filepath, original_binary_map, 'angular_heatmap')
+    mp.angular_heatmap_cluster(walls_projections, pixel_to_wall, filepath, original_binary_map, 'angular_heatmap_cluster')
     dsg.draw_walls(walls_projections, "wall_projections", size, filepath=filepath)
     # this is used to merge together the extended_segments that are very close each other.
     extended_segments_merged = ExtendedSegment.merge_together(extended_segments, param_obj.distance_extended_segment, walls)
     extended_segments_merged, walls_projections_merged = sg.set_weights(extended_segments_merged, walls)
-    dsg.draw_walls(walls_projections_merged, "wall_projections_merged", size, filepath=filepath)
-    sg.wall_projections_heat_map(walls_projections_merged, pixel_to_wall, filepath, original_binary_map, 'heatmap_merged')
-    #draw on original binary image the corrected map removing the initial walls pixels and drawing the pixels belonging to
-    # wall projections
+
     """"
     dsg.draw_hough_black(original_binary_map, lines, 'removedBadPixelsOriginal', size, filepath=filepath)
     dsg.draw_hough_black(orebro_img, lines, 'removedBadPixelsClean', size, filepath=filepath)
@@ -382,7 +371,6 @@ def start_main(par, param_obj, path_obj):
     if draw.rooms:
         fig, ax, patches = dsg.draw_rooms(rooms_th1, colors_th1, '8b_rooms_th1', size, filepath=filepath)
 
-    print(len(rooms_th1))
     # ---------------------------------END LAYOUT------------------------------------------
 
     ind = 0
@@ -392,7 +380,6 @@ def start_main(par, param_obj, path_obj):
     old_colors = []
     voronoi_graph, coordinates = vr.compute_voronoi_graph(path_obj.metric_map_path, param_obj,
                                                           False, '', param_obj.bormann, filepath=filepath)
-    print(patches)
     while old_colors != colors and ind < param_obj.iterations:
         ind += 1
         old_colors = colors
@@ -420,76 +407,4 @@ def make_rooms(patches):
     for p in patches:
         l.append(Polygon(p.get_path().vertices))
     return l
-def createLineIterator(P1, P2, img):
-    """
-    Produces and array that consists of the coordinates and intensities of each pixel in a line between two points
-
-    Parameters:
-        -P1: a numpy array that consists of the coordinate of the first point (x,y)
-        -P2: a numpy array that consists of the coordinate of the second point (x,y)
-        -img: the image being processed
-
-    Returns:
-        -it: a numpy array that consists of the coordinates and intensities of each pixel in the radii (shape: [numPixels, 3], row = [x,y,intensity])
-    """
-    #define local variables for readability
-    imageH = img.shape[0]
-    imageW = img.shape[1]
-    P1X = P1[0]
-    P1Y = P1[1]
-    P2X = P2[0]
-    P2Y = P2[1]
-
-    #difference and absolute difference between points
-    #used to calculate slope and relative location between points
-    dX = P2X - P1X
-    dY = P2Y - P1Y
-    dXa = np.abs(dX)
-    dYa = np.abs(dY)
-
-    #predefine numpy array for output based on distance between points
-    itbuffer = np.empty(shape=(np.maximum(dYa,dXa),3),dtype=np.float32)
-    itbuffer.fill(np.nan)
-
-    #Obtain coordinates along the line using a form of Bresenham's algorithm
-    negY = P1Y > P2Y
-    negX = P1X > P2X
-    if P1X == P2X: #vertical line segment
-       itbuffer[:,0] = P1X
-       if negY:
-           itbuffer[:,1] = np.arange(P1Y - 1,P1Y - dYa - 1,-1)
-       else:
-           itbuffer[:,1] = np.arange(P1Y+1,P1Y+dYa+1)
-    elif P1Y == P2Y: #horizontal line segment
-       itbuffer[:,1] = P1Y
-       if negX:
-           itbuffer[:,0] = np.arange(P1X-1,P1X-dXa-1,-1)
-       else:
-           itbuffer[:,0] = np.arange(P1X+1,P1X+dXa+1)
-    else: #diagonal line segment
-       steepSlope = dYa > dXa
-       if steepSlope:
-           slope = dX.astype(np.float32)/dY.astype(np.float32)
-           if negY:
-               itbuffer[:,1] = np.arange(P1Y-1,P1Y-dYa-1,-1)
-           else:
-               itbuffer[:,1] = np.arange(P1Y+1,P1Y+dYa+1)
-           itbuffer[:,0] = (slope*(itbuffer[:,1]-P1Y)).astype(np.int) + P1X
-       else:
-           slope = dY.astype(np.float32)/dX.astype(np.float32)
-           if negX:
-               itbuffer[:,0] = np.arange(P1X-1,P1X-dXa-1,-1)
-           else:
-               itbuffer[:,0] = np.arange(P1X+1,P1X+dXa+1)
-           itbuffer[:,1] = (slope*(itbuffer[:,0]-P1X)).astype(np.int) + P1Y
-
-    #Remove points outside of image
-    colX = itbuffer[:,0]
-    colY = itbuffer[:,1]
-    itbuffer = itbuffer[(colX >= 0) & (colY >=0) & (colX<imageW) & (colY<imageH)]
-
-    #Get intensities from img ndarray
-    #itbuffer[:,2] = img[itbuffer[:,1].astype(np.uint),itbuffer[:,0].astype(np.uint)]
-    itbuffer[:, 2] = 255
-    return itbuffer
 

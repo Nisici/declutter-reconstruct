@@ -148,7 +148,6 @@ def topolar(img, order=1):
 
     rads = max_radius * np.linspace(0, 1, img.shape[0])
     angs = np.linspace(0, 2 * np.pi, img.shape[1])
-
     return polar, (rads, angs)
 
 

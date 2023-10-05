@@ -84,4 +84,3 @@ if __name__ == "__main__":
      parser = argparse.ArgumentParser()
      parser.add_argument('img_file', help='Path to the map')
      args = parser.parse_args()
-     main('map3.png', '',0.18)

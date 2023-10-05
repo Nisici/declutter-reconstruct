@@ -384,40 +384,6 @@ def set_weights(edges, wall_list):
 		del projections[:]
 	return edges, walls_projections
 
-#problem: heatmap looks inconsistent with wall_projections image, some walls should be red but they are blue why?
-# looks like it happens if you lower the sogliaCluesterMura. Some wall projections are not considered?
-def wall_projections_heat_map(walls_projections, pixel_to_wall, filepath, original_map, name):
-	def distance_point_line(line, point_x, point_y):
-		return np.abs(
-			(line.y1 - line.y2) * point_x - (line.x1 - line.x2) * point_y + line.x1 * line.y2 - line.y1 * line.x2) / np.sqrt(
-			(line.y1 - line.y2) ** 2 + (line.x1 - line.x2) ** 2
-		)
-	max_distance = 0
-	heatmapOriginal = original_map.copy()
-	heatmapOriginal = cv2.cvtColor(heatmapOriginal, cv2.COLOR_GRAY2RGB)
-	for (x, y), wall in pixel_to_wall.items():
-		# Get the associated line
-		#there are more than one wall projection for spatial cluster but they have the same value(?) why
-		line = [h for h in walls_projections if h.spatial_cluster == wall.spatial_cluster][0]
-		# Calculate the distance of the pixel from the line using the point-line distance formula
-		distance = distance_point_line(line, x, y)
-		# Update max_distance if the current distance is greater
-		if distance > max_distance :
-			max_distance = distance
-	colormap = plt.get_cmap('jet')
-	colormap = colormap.reversed()
-	heatmap = np.zeros_like(original_map, shape=(original_map.shape[0], original_map.shape[1], 3))
-	for (x, y), wall in pixel_to_wall.items():
-		line = [h for h in walls_projections if h.spatial_cluster == wall.spatial_cluster][0]
-		distance = distance_point_line(line, x, y)
-		# Map the distance to a color in the colormap
-		normalized = distance/max_distance
-		color = colormap(normalized)
-		# Set the color in the heatmap
-		heatmapOriginal[y, x] = (color[0]*255, color[1]*255, color[2]*255)
-		heatmap[y, x] = (color[0]*255, color[1]*255, color[2]*255)
-	plt.imsave(filepath + name + '.png', heatmap)
-	plt.imsave(filepath + name + '_on_original.png', heatmapOriginal)
 
 def project_point(x1, y1, x2, y2, x3, y3):
 	# given the segment with extreme x2,y2 and x3,y3, project the point1 on segment
