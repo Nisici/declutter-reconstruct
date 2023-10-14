@@ -54,14 +54,14 @@ class ParameterObj:
         self.minOffset = 0.00001
 
         # Spatial cluster parameters
-        self.sogliaLateraleClusterMura = 5
+        self.sogliaLateraleClusterMura = 8
 
         # Extended lines parameters
-        self.th1 = 0.1
+        self.th1 = 0.0
         self.distance_extended_segment = 20
 
         # Edges parameters
-        self.threshold_edges = 0.1
+        self.threshold_edges = 0.0
 
         # Matrix parameters
         # parameter to check the weight of an edge for clustering of faces
@@ -75,7 +75,7 @@ class ParameterObj:
         self.division_threshold = 5
 
         # Orebro parameters
-        self.filter_level = 0.18
+        self.filter_level = 0.001
 
         # post processing parameters
         self.th_post = 750
@@ -90,12 +90,15 @@ class ParameterObj:
         #                     'iou mean gt', 'iou gt'], [[], [], [], [], [], [], [], [], []]]
         self.total_index = [['map'], ['prec micro'], ['prec macro'], ['rec micro'], ['rec macro'], ['iou mean seg'],
                             ['iou seg'], ['iou mean gt'], ['iou gt']]
-        self.total_index_morphological = [['map'], ['prec micro'], ['prec macro'], ['rec micro'], ['rec macro'], ['iou mean seg'],
-                            ['iou seg'], ['iou mean gt'], ['iou gt']]
-        self.total_index_distance = [['map'], ['prec micro'], ['prec macro'], ['rec micro'], ['rec macro'], ['iou mean seg'],
-                            ['iou seg'], ['iou mean gt'], ['iou gt']]
-        self.total_index_voronoi = [['map'], ['prec micro'], ['prec macro'], ['rec micro'], ['rec macro'], ['iou mean seg'],
-                            ['iou seg'], ['iou mean gt'], ['iou gt']]
+        self.total_index_morphological = [['map'], ['prec micro'], ['prec macro'], ['rec micro'], ['rec macro'],
+                                          ['iou mean seg'],
+                                          ['iou seg'], ['iou mean gt'], ['iou gt']]
+        self.total_index_distance = [['map'], ['prec micro'], ['prec macro'], ['rec micro'], ['rec macro'],
+                                     ['iou mean seg'],
+                                     ['iou seg'], ['iou mean gt'], ['iou gt']]
+        self.total_index_voronoi = [['map'], ['prec micro'], ['prec macro'], ['rec micro'], ['rec macro'],
+                                    ['iou mean seg'],
+                                    ['iou seg'], ['iou mean gt'], ['iou gt']]
 
         # integration from orebro
         self.comp = None
@@ -138,7 +141,7 @@ class ParameterDraw:
         self.extended_lines = True
         self.edges = True
         self.dbscan = True
-        self.cells_in_out = True
+        self.cells_in_out = False
         self.rooms = True
         self.rooms_on_map = True
         self.rooms_on_map_prediction = True

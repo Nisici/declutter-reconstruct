@@ -95,14 +95,13 @@ def start_main(par, param_obj, path_obj):
 
     lines = walls
     walls = lay.create_walls(lines)
-    print("lines:", len(lines), 'walls:', len(walls))
+    # BINARY MAP
+    original_binary_map = cv2.bitwise_not(img_ini)
+    original_binary_map = cv2.cvtColor(original_binary_map, cv2.COLOR_RGB2GRAY)
     if not param_obj.bormann:
         if draw.walls:
             # draw Segments
             dsg.draw_walls(walls, '3_Walls', size, filepath=filepath)
-            # BINARY MAP
-            original_binary_map = cv2.bitwise_not(img_ini)
-            original_binary_map = cv2.cvtColor(original_binary_map, cv2.COLOR_RGB2GRAY)
         lim1, lim2 = 300, 450
         """""
         while not(lim1 <= len(walls) <= lim2):
@@ -234,6 +233,8 @@ def start_main(par, param_obj, path_obj):
 
 #######DRAW WALLS WITH HOUGH AND MASK ORIGINAL IMAGE#########
     mask = np.zeros_like(original_binary_map)
+    #wall color in the binary map
+    wall_white = 150
     # Create a dictionary to associate each pixel with the wall that masked it
     pixel_to_wall = {}
     # Iterate through the detected lines and draw them on the mask while associating pixels
@@ -243,16 +244,18 @@ def start_main(par, param_obj, path_obj):
         # Iterate through the pixels covered by this line segment
         for y in range(min(int(wall.y1), int(wall.y2)), max(int(wall.y1), int(wall.y2)) + 1):
             for x in range(min(int(wall.x1), int(wall.x2)), max(int(wall.x1), int(wall.x2)) + 1):
-                if (mask[y, x] == 255) and (original_binary_map[y, x] == 255):
+                #white perchè nelle mappe create automaticamente quello è il valore che corrisponde al bianco.
+                if (mask[y, x] == 255) and (original_binary_map[y, x] >= wall_white):
                     pixel_to_wall[(x, y)] = wall
-
-    masked_image = cv2.bitwise_and(orebro_img, orebro_img, mask=mask)
-    cv2.imwrite(filepath + "masked_image.jpg", masked_image)
+    plt.imsave(filepath + "binary.png", original_binary_map, cmap="gray")
+    cv2.imwrite(filepath + "masked_image.jpg", mask)
+    #masked_image = cv2.bitwise_and(orebro_img, orebro_img, mask=mask)
+    #cv2.imwrite(filepath + "masked_image.jpg", masked_image)
     #DRAW HEATMAP OF WALL PROJECTIONS
     extended_segments, walls_projections = sg.set_weights(extended_segments, walls)
-    mp.distance_heat_map(walls_projections, pixel_to_wall, filepath, original_binary_map, 'distance_heatmap')
+    mp.distance_heat_map(walls_projections, pixel_to_wall, filepath, img_ini, 'distance_heatmap')
     mp.angular_heatmap(walls_projections, pixel_to_wall, filepath, original_binary_map, 'angular_heatmap')
-    mp.angular_heatmap_cluster(walls_projections, pixel_to_wall, filepath, original_binary_map, 'angular_heatmap_cluster')
+    #mp.angular_heatmap_cluster(walls_projections, pixel_to_wall, filepath, original_binary_map, 'angular_heatmap_cluster')
     dsg.draw_walls(walls_projections, "wall_projections", size, filepath=filepath)
     # this is used to merge together the extended_segments that are very close each other.
     extended_segments_merged = ExtendedSegment.merge_together(extended_segments, param_obj.distance_extended_segment, walls)

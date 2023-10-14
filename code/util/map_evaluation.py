@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import math
 import object.Segment as Segment
-
+import util.disegna as dsg
 """
 Calculate the distance heat map between walls and walls projections and draw it.
 walls_projections: array of walls projections calculated in the Segment.set_weights() file.
@@ -21,7 +21,8 @@ def distance_heat_map(walls_projections, pixel_to_wall, filepath, original_map, 
 		)
 	max_distance = 0
 	heatmapOriginal = original_map.copy()
-	heatmapOriginal = cv2.cvtColor(heatmapOriginal, cv2.COLOR_GRAY2RGB)
+	if len(heatmapOriginal.shape) == 2:
+		heatmapOriginal = cv2.cvtColor(heatmapOriginal, cv2.COLOR_GRAY2RGB)
 	for (x, y), wall in pixel_to_wall.items():
 		# Get the associated line
 		#there are more than one wall projection for spatial cluster but they have the same value(?) why
@@ -98,6 +99,7 @@ def angular_heatmap(walls_projections, pixel_to_wall, filepath, original_map, na
 		distances[wall] = distance
 		if distance > max_distance :
 			max_distance = distance
+	#print("Max distance: {}".format(max_distance))
 	colormap = plt.get_cmap('jet')
 	colormap = colormap.reversed()
 	heatmap = np.zeros_like(original_map, shape=(original_map.shape[0], original_map.shape[1], 3))
@@ -113,7 +115,19 @@ def angular_heatmap(walls_projections, pixel_to_wall, filepath, original_map, na
 	plt.imsave(filepath + name + '_on_original.png', heatmapOriginal)
 	return heatmap
 
+#find the longest line that connects two walls, returns the coordinates
+def find_longest_line(wall1, wall2):
+	def distance(x1, y1, x2, y2):
+		return ((x1 - x2)**2 + (y1 - y2)**2)**0.5
+	distances = []
+	distances.append([distance(wall1.x1, wall1.y1, wall2.x1, wall2.y1), wall1.x1, wall1.y1, wall2.x1, wall2.y1])
+	distances.append([distance(wall1.x1, wall1.y1, wall2.x2, wall2.y2), wall1.x1, wall1.y1, wall2.x2, wall2.y2])
+	distances.append([distance(wall1.x2, wall1.y2, wall2.x1, wall2.y1), wall1.x2, wall1.y2, wall2.x1, wall2.y1])
+	distances.append([distance(wall1.x2, wall1.y2, wall2.x2, wall2.y2), wall1.x2, wall1.y2, wall2.x2, wall2.y2])
+	return [x for x in distances if x[0] == max(distances, key=lambda x: x[0])[0]][0][1:]
 
+
+#DOESN'T WORK YET.
 """
 Calculate the angular heat map between walls and walls projections and draw it.
 walls_projections: array of walls projections calculated in the Segment.set_weights() file.
@@ -133,23 +147,89 @@ def angular_heatmap_cluster(walls_projections, pixel_to_wall, filepath, original
 	heatmapOriginal = cv2.cvtColor(heatmapOriginal, cv2.COLOR_GRAY2RGB)
 	walls = set(pixel_to_wall.values())
 	# WALLS WITH THE SAME WALL_CLUSTER
-	wall_clusters = []
-	idx = 0
+	wall_clusters = {}
+	lines = []
 	for w1 in walls:
-		wall_clusters.append([w1])
+		if w1.wall_cluster not in wall_clusters:
+			wall_clusters[w1.wall_cluster] = [w1]
 		for w2 in walls:
 			if w1 != w2 and w1.wall_cluster == w2.wall_cluster:
-				wall_clusters[idx].append(w2)
-		idx+=1
+				wall_clusters[w1.wall_cluster].append(w2)
+	for w_clust, walls in wall_clusters.items():
+		#da sistemare è wall cluster non spatial cluster
+		wall_proj = [h for h in walls_projections if h.spatial_cluster == walls[0].spatial_cluster][0]
+		wall_cluster_length = 0
+		# calculate wall_cluster length
+		for wall1 in walls:
+			for wall2 in walls:
+				if wall1 != wall2:
+
+					wall1_length = Segment.length(wall1.x1, wall1.y1, wall1.x2, wall1.y2)
+					wall2_length = Segment.length(wall2.x1, wall2.y1, wall2.x2, wall2.y2)
+					wall_distance = Segment.segments_distance(wall1.x1, wall1.y1, wall1.x2, wall1.y2,
+															  wall2.x1, wall2.y1, wall2.x2,
+															  wall2.y2) + wall1_length + wall2_length
+					#wall_distance = max(wall1_length, wall2_length, wall_distance)
+					if wall_distance > wall_cluster_length:
+						x1, y1, x2, y2 = find_longest_line(wall1, wall2)
+						angle = Segment.radiant_inclination(x1, y1, x2, y2)
+						if angle > 0.3:
+							x1, y1, x2, y2 = wall1.x1, wall1.y1, wall1.x2, wall1.y2
+							wall_cluster_length = 0
+						else:
+							wall_cluster_length = wall_distance
+						line = Segment.Segment(x1, y1, x2, y2)
+		if wall_cluster_length == 0:
+			w = walls[0]
+			line = Segment.Segment(w.x1, w.y1, w.x2, w.y2)
+		lines.append(line)
+		distance = angular_distance(line, wall_proj)
+		for wall in walls:
+			distances[wall] = distance
+		if distance > max_distance:
+			max_distance = distance
+	""""
+	WEIGHT WALLS ANGULAR DISTANCE BASED ON HOW MUCH WALL CLUSTER THEY OCCUPY.
+	DOESN'T WORK BECAUSE WALL CLUSTER LENGTH DOESN'T COUNT ALSO THE FACT THAT THERE ARE MULTIPLE
+	WALLS PARALLEL
 	for idx, w in enumerate(wall_clusters):
+		lines = []
 		distance = 0
 		wall_proj = [h for h in walls_projections if h.spatial_cluster == w[0].spatial_cluster][0]
+		wall_cluster_length = 0
+		#calculate wall_cluster length
+		for wall1 in wall_clusters[idx]:
+			for wall2 in wall_clusters[idx]:
+				if wall1 != wall2:
+					wall1_length = Segment.length(wall1.x1, wall1.y1, wall1.x2, wall1.y2)
+					wall2_length = Segment.length(wall2.x1, wall2.y1, wall2.x2, wall2.y2)
+					wall_distance = Segment.segments_distance(wall1.x1, wall1.y1, wall1.x2, wall1.y2,
+																 wall2.x1, wall2.y1, wall2.x2, wall2.y2) + wall1_length + wall2_length
+					if wall_distance > wall_cluster_length:
+						line = (wall1.x1, wall1.y1, wall2.x2, wall2.y2)
+						wall_cluster = wall1.spatial_cluster
+						wall_cluster_length = wall_distance
+		if wall_cluster_length == 0:
+			w = wall_clusters[idx][0]
+			wall_cluster = w.spatial_cluster
+			wall_cluster_length = Segment.length(w.x1, w.y1, w.x2, w.y2)
+		print("Wall cluster length: {}".format(wall_cluster_length))
+		# for each wall find the distance between wall and wall projection and weight it based on
+		# the percentage of wall that covers its wall_cluster
 		for wall in wall_clusters[idx]:
-			distance += angular_distance(wall, wall_proj)
+			wall_length = Segment.length(wall.x1, wall.y1, wall.x2, wall.y2)
+			#percentuale di wall_cluster occupato dal wall
+			#NON VA BENE PERCHE' ALCUNE PARETI NON SI TROVANO SULLA STESSA RETTA DEL WALL CLUSTER QUINDI
+			# LA PERCENTUALE TOTALE VIENE > 1
+			perc_wall = wall_length/wall_cluster_length
+			print("Wall percentage: {}".format(perc_wall))
+			distance += (angular_distance(wall, wall_proj) * perc_wall)
+		print("Distance: {}".format(distance))
 		for wall in wall_clusters[idx]:
 			distances[wall] = distance
 		if distance > max_distance:
 			max_distance = distance
+		"""
 	colormap = plt.get_cmap('jet')
 	colormap = colormap.reversed()
 	heatmap = np.zeros_like(original_map, shape=(original_map.shape[0], original_map.shape[1], 3))
@@ -163,4 +243,5 @@ def angular_heatmap_cluster(walls_projections, pixel_to_wall, filepath, original
 		heatmap[y, x] = (color[0] * 255, color[1] * 255, color[2] * 255)
 	plt.imsave(filepath + name + '.png', heatmap)
 	plt.imsave(filepath + name + '_on_original.png', heatmapOriginal)
+	dsg.draw_walls(lines, "lines", original_map.shape, filepath=filepath)
 	return heatmap
