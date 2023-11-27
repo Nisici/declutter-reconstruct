@@ -25,6 +25,8 @@ class PathObj:
 
 class ParameterObj:
     def __init__(self):
+        #stop after finding the extended lines
+        self.stop_after_lines = True
         # bormann
         self.bormann = False
 
@@ -54,7 +56,7 @@ class ParameterObj:
         self.minOffset = 0.00001
 
         # Spatial cluster parameters
-        self.sogliaLateraleClusterMura = 8
+        self.sogliaLateraleClusterMura = 5
 
         # Extended lines parameters
         self.th1 = 0.0
@@ -75,7 +77,7 @@ class ParameterObj:
         self.division_threshold = 5
 
         # Orebro parameters
-        self.filter_level = 0.001
+        self.filter_level = 0.01
 
         # post processing parameters
         self.th_post = 750
@@ -133,7 +135,7 @@ class ParameterDraw:
         self.canny = False
         self.hough = True
         self.walls = True
-        self.contour = False
+        self.contour = True
         self.angular_cluster = True
         self.representative_segments = True
         self.spatial_wall_cluster = True
