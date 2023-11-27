@@ -20,6 +20,7 @@ def distance_heat_map(walls_projections, pixel_to_wall, filepath, original_map, 
 			(line.y1 - line.y2) ** 2 + (line.x1 - line.x2) ** 2
 		)
 	max_distance = 0
+	min_distance = 0 #arbitrary
 	heatmapOriginal = original_map.copy()
 	if len(heatmapOriginal.shape) == 2:
 		heatmapOriginal = cv2.cvtColor(heatmapOriginal, cv2.COLOR_GRAY2RGB)
@@ -34,11 +35,14 @@ def distance_heat_map(walls_projections, pixel_to_wall, filepath, original_map, 
 	colormap = plt.get_cmap('jet')
 	colormap = colormap.reversed()
 	heatmap = np.zeros_like(original_map, shape=(original_map.shape[0], original_map.shape[1], 3))
+	print('max distance: {}'.format(max_distance))
+	print('min distance: {}'.format(min_distance))
 	for (x, y), wall in pixel_to_wall.items():
 		line = [h for h in walls_projections if h.spatial_cluster == wall.spatial_cluster][0]
 		distance = distance_point_line(line, x, y)
+		normalized = (distance - min_distance) / (max_distance - min_distance)
 		# Map the distance to a color in the colormap
-		normalized = distance/max_distance
+		#normalized = distance/max_distance
 		color = colormap(normalized)
 		# Set the color in the heatmap
 		heatmapOriginal[y, x] = (color[0]*255, color[1]*255, color[2]*255)
@@ -89,6 +93,7 @@ that has been computed using these pixels and walls.
 """
 def angular_heatmap(walls_projections, pixel_to_wall, filepath, original_map, name):
 	max_distance = 0
+	min_distance = float('inf')
 	# dictionary (wall : distance)
 	distances = {}
 	heatmapOriginal = original_map.copy()
@@ -97,6 +102,8 @@ def angular_heatmap(walls_projections, pixel_to_wall, filepath, original_map, na
 		wall_proj = [h for h in walls_projections if h.spatial_cluster == wall.spatial_cluster][0]
 		distance = angular_distance(wall, wall_proj)
 		distances[wall] = distance
+		if distance < min_distance:
+			min_distance = distance
 		if distance > max_distance :
 			max_distance = distance
 	#print("Max distance: {}".format(max_distance))
@@ -106,7 +113,8 @@ def angular_heatmap(walls_projections, pixel_to_wall, filepath, original_map, na
 	for (x, y), wall in pixel_to_wall.items():
 		distance = distances[wall]
 		# Map the distance to a color in the colormap
-		normalized = distance/max_distance
+		#normalized = distance/max_distance
+		normalized = (distance - min_distance) / (max_distance - min_distance)
 		color = colormap(normalized)
 		# Set the color in the heatmap
 		heatmapOriginal[y, x] = (color[0]*255, color[1]*255, color[2]*255)
