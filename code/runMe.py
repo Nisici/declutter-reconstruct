@@ -222,7 +222,9 @@ def start_main(action, parameters_object, paths):
         # ----------------------------------------------------------------
         # starting main
         print('map name ', paths.metric_map_name)
-        minibatch.start_main(par, parameters_object, paths)
+        m = minibatch.Minibatch()
+        m.start_main(par, parameters_object, paths)
+
 
     # -------------------------------ENDING EXECUTION AND EVALUATION TIME------------------------------------
 
