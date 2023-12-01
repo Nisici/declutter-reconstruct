@@ -83,8 +83,8 @@ def main():
         # asking what map to use
         paths.metric_map_name = check_int(paths.path_folder_input)
         paths.metric_map_path = os.path.join(paths.path_folder_input + '/' + paths.metric_map_name)
-        start_main(action, parameters_object, paths)
-
+        rose = start_main(action, parameters_object, paths)
+        return rose
     elif action == 'batch':
         # saving the output folder
         paths.path_folder_output = os.path.join('./data/OUTPUT', paths.name_folder_input)
@@ -224,7 +224,7 @@ def start_main(action, parameters_object, paths):
         print('map name ', paths.metric_map_name)
         m = minibatch.Minibatch()
         m.start_main(par, parameters_object, paths)
-
+        return m
 
     # -------------------------------ENDING EXECUTION AND EVALUATION TIME------------------------------------
 
