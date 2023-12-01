@@ -54,20 +54,20 @@ def manhattan_directions(directions):
         return x[0] + x[1]
 
     # Constraints functions
-    # angle = abs(angle1 - angle2)
-    # angle + displacement <= pi/2 + epsilon
-    # 3.15 <= 3.14 + 0.01
+    # angle1 = angle1 + displacement1
+    # angle2 = angle2 + displacement2
+    # abs(angle1 - angle2) <= pi/2 + epsilon
     def lower_than(x, angle1, angle2, margin=0):
         return -abs(x[0] + angle1 - (x[1] + angle2)) + np.pi/2 + margin
 
-    # angle = abs(dir1 - dir2)
-    # angle + displacement >= pi/2 - epsilon
-    # 3.13 >= 3.14 - 0.01
+
+    # abs(angle1 - angle2) >= pi/2 - epsilon
     def greater_than(x, angle1, angle2, margin=0):
         return abs(x[0] + angle1 - (x[1] + angle2)) - np.pi/2 + margin
 
     def equal_to(x, angle1, angle2):
         return abs(x[0] + angle1 - (x[1] + angle2)) - np.pi/2
+
     def positive_obj_fun(x):
         return x[0] + x[1]
 
