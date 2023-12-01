@@ -30,7 +30,7 @@ def print_parameters(param_obj, path_obj):
 
 
 def final_routine(img_ini, param_obj, size, draw, extended_segments_th1_merged, ind, rooms_th1, filepath):
-    #post.clear_rooms(filepath + '8b_rooms_th1.png', param_obj, rooms_th1)
+    #post.clear_rooms(filepath + '8b_rooms_th1.png', self.param_obj, rooms_th1)
     if draw.rooms_on_map:
         segmentation_map_path = dsg.draw_rooms_on_map(img_ini, '8b_rooms_th1_on_map', size, filepath=filepath)
     """
@@ -43,7 +43,7 @@ def final_routine(img_ini, param_obj, size, draw, extended_segments_th1_merged, 
     """
     # -------------------------------------POST-PROCESSING------------------------------------------------
 
-    segmentation_map_path_post, colors = post.oversegmentation(segmentation_map_path, param_obj.th_post, filepath=filepath)
+    segmentation_map_path_post, colors = post.oversegmentation(segmentation_map_path, self.param_obj.th_post, filepath=filepath)
     return segmentation_map_path_post, colors
 
 # map1 - map2
@@ -59,7 +59,8 @@ def map_difference(map1, map2):
     return result
 class Minibatch:
     def start_main(self, par, param_obj, path_obj):
-        param_obj.tab_comparison = [[''], ['precision_micro'], ['precision_macro'], ['recall_micro'], ['recall_macro'],
+        self.param_obj = param_obj
+        self.param_obj.tab_comparison = [[''], ['precision_micro'], ['precision_macro'], ['recall_micro'], ['recall_macro'],
                                     ['iou_micro_mean_seg_to_gt'], ['iou_macro_seg_to_gt'], ['iou_micro_mean_gt_to_seg'],
                                     ['iou_macro_gt_to_seg']]
         start_time_main = time.time()
@@ -67,7 +68,7 @@ class Minibatch:
         draw = par.ParameterDraw()
         self.filepath = path_obj.filepath
         print(self.filepath)
-        print_parameters(param_obj, path_obj)
+        print_parameters(self.param_obj, path_obj)
 
         # ----------------------------1.0_LAYOUT OF ROOMS------------------------------------
         # ------ starting layout
@@ -84,7 +85,7 @@ class Minibatch:
 
         # -----------------------------1.1_CANNY AND HOUGH-------------------------------------
 
-        self.walls, canny = lay.start_canny_and_hough(img_rgb, param_obj)
+        self.walls, canny = lay.start_canny_and_hough(img_rgb, self.param_obj)
 
         print("walls:", len(self.walls))
 
@@ -99,22 +100,22 @@ class Minibatch:
         # BINARY MAP
         original_binary_map = cv2.bitwise_not(img_ini)
         original_binary_map = cv2.cvtColor(original_binary_map, cv2.COLOR_RGB2GRAY)
-        if not param_obj.bormann:
+        if not self.param_obj.bormann:
             if draw.walls:
                 # draw Segments
                 dsg.draw_walls(self.walls, '3_Walls', self.size, filepath=self.filepath)
             lim1, lim2 = 300, 450
             """""
             while not(lim1 <= len(walls) <= lim2):
-                if param_obj.filter_level <= 0.12:
+                if self.param_obj.filter_level <= 0.12:
                     break
     
                 if len(walls) < lim1:
-                    param_obj.set_filter_level(param_obj.filter_level - 0.02)
+                    self.param_obj.set_filter_level(self.param_obj.filter_level - 0.02)
                 if len(walls) > lim2:
-                    param_obj.set_filter_level(param_obj.filter_level + 0.02)
-                fft.main(path_obj.metric_map_path, path_obj.path_orebro, param_obj.filter_level, param_obj)
-                path_obj.orebro_img = filepath + 'OREBRO_' + str(param_obj.filter_level) + '.png'
+                    self.param_obj.set_filter_level(self.param_obj.filter_level + 0.02)
+                fft.main(path_obj.metric_map_path, path_obj.path_orebro, self.param_obj.filter_level, self.param_obj)
+                path_obj.orebro_img = filepath + 'OREBRO_' + str(self.param_obj.filter_level) + '.png'
     
                 # ----------------------------1.0_LAYOUT OF ROOMS------------------------------------
                 # ------ starting layout
@@ -131,7 +132,7 @@ class Minibatch:
     
                 # -----------------------------1.1_CANNY AND HOUGH-------------------------------------
     
-                walls, canny = lay.start_canny_and_hough(img_rgb, param_obj)
+                walls, canny = lay.start_canny_and_hough(img_rgb, self.param_obj)
     
                 print("walls:", len(walls))
     
@@ -158,7 +159,7 @@ class Minibatch:
         xmax = extremes[1]
         ymin = extremes[2]
         ymax = extremes[3]
-        offset = param_obj.offset
+        offset = self.param_obj.offset
         xmin -= offset
         xmax += offset
         ymin -= offset
@@ -187,8 +188,8 @@ class Minibatch:
 
         # ---------------1.4_MEAN SHIFT TO FIND ANGULAR CLUSTERS-------------------------------
 
-        indexes, self.walls, angular_clusters = lay.cluster_ang(param_obj.h, param_obj.minOffset, self.walls, diagonals=param_obj.diagonals)
-        angular_clusters = lay.assign_orebro_direction(param_obj.comp, self.walls)
+        indexes, self.walls, angular_clusters = lay.cluster_ang(self.param_obj.h, self.param_obj.minOffset, self.walls, diagonals=self.param_obj.diagonals)
+        angular_clusters = lay.assign_orebro_direction(self.param_obj.comp, self.walls)
         if draw.angular_cluster:
             dsg.draw_angular_clusters(angular_clusters, self.walls, '5a_angular_clusters', self.size, filepath=self.filepath)
         # -------------------------------------------------------------------------------------
@@ -210,10 +211,10 @@ class Minibatch:
         if draw.representative_segments:
             dsg.draw_representative_segments(representatives_segments, "5b_representative_segments", self.size, filepath=self.filepath)
 
-        representatives_segments = sg.spatial_clustering(param_obj.sogliaLateraleClusterMura, representatives_segments)
+        representatives_segments = sg.spatial_clustering(self.param_obj.sogliaLateraleClusterMura, representatives_segments)
 
         # now we have a set of Segments with correct spatial cluster, now set the others with same wall_cluster
-        spatial_clusters = lay.new_spatial_cluster(self.walls, representatives_segments, param_obj)
+        spatial_clusters = lay.new_spatial_cluster(self.walls, representatives_segments, self.param_obj)
         if draw.spatial_wall_cluster:
             dsg.draw_spatial_wall_clusters(wall_clusters, self.walls, '5c_spatial_wall_cluster', self.size, filepath=self.filepath)
 
@@ -231,7 +232,7 @@ class Minibatch:
             dsg.draw_extended_lines(self.extended_segments, self.walls, '7a_extended_lines', self.size, filepath=self.filepath + '/Extended_Lines')
             # Create an empty mask with the same dimensions as the image
         self.extended_segments, walls_projections = sg.set_weights(self.extended_segments, self.walls)
-        if not param_obj.stop_after_lines:
+        if not self.param_obj.stop_after_lines:
         #######DRAW WALLS WITH HOUGH AND MASK ORIGINAL IMAGE#########
             mask = np.zeros_like(original_binary_map)
             #wall color in the binary map
@@ -258,7 +259,7 @@ class Minibatch:
             #mp.angular_heatmap_cluster(walls_projections, pixel_to_wall, filepath, original_binary_map, 'angular_heatmap_cluster')
             dsg.draw_walls(walls_projections, "wall_projections", size, filepath=filepath)
             # this is used to merge together the extended_segments that are very close each other.
-            extended_segments_merged = ExtendedSegment.merge_together(self.extended_segments, param_obj.distance_extended_segment, walls)
+            extended_segments_merged = ExtendedSegment.merge_together(self.extended_segments, self.param_obj.distance_extended_segment, walls)
             extended_segments_merged, walls_projections_merged = sg.set_weights(extended_segments_merged, walls)
 
             """"
@@ -274,7 +275,7 @@ class Minibatch:
 
             # this is needed in order to maintain the extended lines of the offset STANDARD
             border_lines = lay.set_weight_offset(extended_segments_merged, xmax, xmin, ymax, ymin)
-            extended_segments_th1_merged, ex_li_removed = sg.remove_less_representatives(extended_segments_merged, param_obj.th1)
+            extended_segments_th1_merged, ex_li_removed = sg.remove_less_representatives(extended_segments_merged, self.param_obj.th1)
             if draw.extended_lines:
                 dsg.draw_extended_lines(extended_segments_merged, walls, '7a_extended_lines_merged', size,
                                         filepath=filepath + '/Extended_Lines')
@@ -313,9 +314,9 @@ class Minibatch:
             if draw.edges:
                 make_folder(filepath, 'Edges')
                 dsg.draw_edges(edges, walls, -1, '7c_edges', size, filepath=filepath + '/Edges')
-                dsg.draw_edges(edges, walls, param_obj.threshold_edges, '7c_edges_weighted', size, filepath=filepath + '/Edges')
+                dsg.draw_edges(edges, walls, self.param_obj.threshold_edges, '7c_edges_weighted', size, filepath=filepath + '/Edges')
                 dsg.draw_edges(edges_th1, walls, -1, '7c_edges_th1', size, filepath=filepath + '/Edges')
-                dsg.draw_edges(edges_th1, walls, param_obj.threshold_edges, '7c_edges_th1_weighted', size, filepath=filepath + '/Edges')
+                dsg.draw_edges(edges_th1, walls, self.param_obj.threshold_edges, '7c_edges_th1_weighted', size, filepath=filepath + '/Edges')
             # -------------------------------------------------------------------------------------
 
             # ----------------------------1.9_CREATE CELLS-----------------------------------------
@@ -330,7 +331,7 @@ class Minibatch:
             global centroid
             if par.metodo_classificazione_celle == 1:
                 print("1.classification method: ", par.metodo_classificazione_celle)
-                (cells_th1, cells_out_th1, cells_polygons_th1, indexes_th1, cells_partials_th1, contour_th1, centroid_th1, points_th1) = lay.classification_surface(self.vertices, cells_th1, param_obj.division_threshold)
+                (cells_th1, cells_out_th1, cells_polygons_th1, indexes_th1, cells_partials_th1, contour_th1, centroid_th1, points_th1) = lay.classification_surface(self.vertices, cells_th1, self.param_obj.division_threshold)
 
             # -------------------------------------------------------------------------------------
 
@@ -343,13 +344,13 @@ class Minibatch:
 
             # ----------------------MATRICES L, D, D^-1, ED M = D^-1 * L--------------------------
 
-            (matrix_l_th1, matrix_d_th1, matrix_d_inv_th1, X_th1) = lay.create_matrices(cells_th1, sigma=param_obj.sigma)
+            (matrix_l_th1, matrix_d_th1, matrix_d_inv_th1, X_th1) = lay.create_matrices(cells_th1, sigma=self.param_obj.sigma)
 
             # -------------------------------------------------------------------------------------
 
             # ----------------DBSCAN PER TROVARE CELLE NELLA STESSA STANZA-------------------------
 
-            cluster_cells_th1 = lay.DB_scan(param_obj.eps, param_obj.minPts, X_th1, cells_polygons_th1)
+            cluster_cells_th1 = lay.DB_scan(self.param_obj.eps, self.param_obj.minPts, X_th1, cells_polygons_th1)
 
             if draw.dbscan:
                 colors_th1, fig, ax = dsg.draw_dbscan(cluster_cells_th1, cells_th1, cells_polygons_th1, edges_th1, contours, '7b_DBSCAN_th1', size, filepath=filepath)
@@ -378,16 +379,16 @@ class Minibatch:
 
             ind = 0
 
-            segmentation_map_path_post, colors = final_routine( img_ini, param_obj, size, draw,
+            segmentation_map_path_post, colors = final_routine( img_ini, self.param_obj, size, draw,
                                                                extended_segments_th1_merged, ind, rooms_th1, filepath=filepath)
             old_colors = []
-            voronoi_graph, coordinates = vr.compute_voronoi_graph(path_obj.metric_map_path, param_obj,
-                                                                  False, '', param_obj.bormann, filepath=filepath)
-            while old_colors != colors and ind < param_obj.iterations:
+            voronoi_graph, coordinates = vr.compute_voronoi_graph(path_obj.metric_map_path, self.param_obj,
+                                                                  False, '', self.param_obj.bormann, filepath=filepath)
+            while old_colors != colors and ind < self.param_obj.iterations:
                 ind += 1
                 old_colors = colors
-                vr.voronoi_segmentation(patches, colors_th1, size, voronoi_graph, coordinates, param_obj.comp, path_obj.metric_map_path, ind, filepath=filepath)
-                segmentation_map_path_post, colors = final_routine(img_ini, param_obj, size, draw,
+                vr.voronoi_segmentation(patches, colors_th1, size, voronoi_graph, coordinates, self.param_obj.comp, path_obj.metric_map_path, ind, filepath=filepath)
+                segmentation_map_path_post, colors = final_routine(img_ini, self.param_obj, size, draw,
                                                                    extended_segments_th1_merged, ind, rooms_th1, filepath=filepath)
             rooms_th1 = make_rooms(patches)
             colors_final = []
