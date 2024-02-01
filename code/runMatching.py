@@ -16,7 +16,7 @@ from util.feature_matching import contour_matching
 from object.Segment import radiant_inclination
 from util.disegna import draw_extended_lines
 from object.Segment import segments_distance
-
+import PIL.Image
 
 def make_folder(location, folder_name):
     if not os.path.exists(location + '/' + folder_name):
@@ -150,27 +150,27 @@ def compare_main_lines(rose1, par1, rose2, par2):
     print("Dir1: {}, Dir2: {}".format(dir12, dir22))
 
 
-def matching_all_lines(rose1, rose2):
+def matching_all_lines(rose1, rose2, dirs1, dirs2):
     lines1 = rose1.extended_segments[:-4] #remove contour lines
     lines2 = rose2.extended_segments[:-4]
-    matchings = lines_matching(lines1, lines2)
-    avg_dist = average_distance_between_lines(matchings)
-    print("Average distance between lines matchings: {}".format(avg_dist))
-
-def matching_contour(rose1, rose2):
-    contour1 = rose1.vertices
-    contour2 = rose2.vertices
-    matchings = contour_matching(contour1, contour2)
-    avg_distance = average_distance_between_lines(matchings)
-    print("Average distance between contour matchings: {}".format(avg_distance))
-    print("finished")
+    lines_image_1 = PIL.Image.open(rose1.filepath + "/Extended_Lines/7a_extended_lines.png")
+    lines_image_2 = PIL.Image.open(rose2.filepath + "/Extended_Lines/7a_extended_lines.png")
+    lines_image_1 = np.array(lines_image_1.convert('RGB'))
+    lines_image_2 = np.array(lines_image_2.convert('RGB'))
+    avg_dist_matchings = lines_matching(lines1, lines2, dirs1, dirs2)
+    print("Average distance between lines matchings: {}".format(avg_dist_matchings))
 
 
 if __name__ == '__main__':
     m1, par1 = rose_single_action()
-    draw_extended_lines(m1.extended_segments[:-4], m1.walls, "lines_without", m1.size, filepath=m1.filepath)
     m2, par2 = rose_single_action()
-    draw_extended_lines(m2.extended_segments[:-4], m2.walls, "lines_without", m2.size, filepath=m2.filepath)
-    matching_all_lines(m1, m2)
+    #dirs[0] = horizontal direction, dirs[1] = vertical direction
+    dirs1 = par1.comp[0], par1.comp[2]
+    dirs2 = par2.comp[0], par2.comp[2]
+    tol = 1
+    if abs(dirs2[0]-dirs1[0]) >= tol:
+        t = dirs2[0]
+        dirs2[0] = dirs2[1]
+        dirs2[1] = t
+    matching_all_lines(m1, m2, dirs1, dirs2)
     #matching_contour(m1, m2)
-    matching_main_lines(m1, par1, m2, par2)

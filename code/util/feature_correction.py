@@ -7,20 +7,19 @@ from scipy.optimize import minimize
 
 """
 lines: list of ExtendedSegment
-directions: list of manhattan directions (floats)
-returns -> list of ExtendedSegment that are manhattan between each other
+directions: list of directions (floats)
+returns -> list of ExtendedSegment that follows the given directions 
 
 Rotates the lines so that their inclination is equal to the closest direction in directions
 """
-def manhattan_lines(lines, directions):
+def correct_lines(lines, directions):
     new_lines = []
     for l in lines:
-        line_dir = radiant_inclination(l.x1, l.y1, l.x2, l.y2)
+        line_dir = abs(radiant_inclination(l.x1, l.y1, l.x2, l.y2))
         #directions = [0, np.pi/2]
         main_dir = min(directions, key=lambda x: abs(line_dir - x))
         rot_angle = main_dir - line_dir
         new_line = rotate_line(l, rot_angle)
-        line_dir = radiant_inclination(new_line.x1, new_line.y1, new_line.x2, new_line.y2)
         new_lines.append(new_line)
     return new_lines
 

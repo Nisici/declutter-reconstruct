@@ -10,8 +10,6 @@ import fft_structure_extraction
 
 
 def main(path_to_image, path_to_folder, filter_level):
-    # FFT
-
     grid_map = img_as_ubyte(io.imread(path_to_image))
     rose = structure_extraction(grid_map, peak_height=0.2, par=50)
     rose.process_map()

@@ -17,7 +17,7 @@ def make_folder(location, folder_name):
 
 
 def check_int(name_folder):
-    maps = os.listdir(name_folder)
+    maps = sorted(os.listdir(name_folder))
     while True:
         index = 0
         for image in maps:
@@ -224,6 +224,12 @@ def start_main(action, parameters_object, paths):
         print('map name ', paths.metric_map_name)
         m = minibatch.Minibatch()
         m.start_main(par, parameters_object, paths)
+        """
+        with open(paths.filepath + "coordinates.txt", 'w') as file:
+            # Write each coordinate as a line in the file
+            for l in m.extended_segments_th1_merged:
+                file.write("x1: {} y1: {} x2: {} y2: {}\n".format(l.x1, l.y1, l.x2, l.y2))
+        """
         return m
 
     # -------------------------------ENDING EXECUTION AND EVALUATION TIME------------------------------------

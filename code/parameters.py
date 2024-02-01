@@ -77,7 +77,7 @@ class ParameterObj:
         self.division_threshold = 5
 
         # Orebro parameters
-        self.filter_level = 0.01
+        self.filter_level = 0.018
 
         # post processing parameters
         self.th_post = 750

@@ -4,7 +4,174 @@ import matplotlib.pyplot as plt
 import math
 import object.Segment as Segment
 import util.disegna as dsg
+from random import randint
+from object.Segment import radiant_inclination
+from util.feature_matching import lines_of_direction
+from skimage.metrics import structural_similarity
+from sklearn.metrics import jaccard_score
+import os
 """
+returns structural similarity between map and groundtruth
+"""
+def similarity_gt(map, gt):
+	map = np.squeeze(map)
+	gt = np.squeeze(gt)
+	return structural_similarity(map, gt)
+
+def jaccard_idx(map, gt):
+	map_binary = cv2.bitwise_not(map)
+	gt_binary = cv2.bitwise_not(gt)
+	intersection = np.zeros_like(map_binary)
+	intersection = cv2.bitwise_not(intersection)
+
+	# wall color in the binary map
+	wall_white = 150
+	plt.imsave("/Users/gabrielesomaschini/Documents/UNI/UNIMI/Tirocigno/ROSE2/declutter-reconstruct/code/binary_map.png", map_binary, cmap='gray')
+	plt.imsave("/Users/gabrielesomaschini/Documents/UNI/UNIMI/Tirocigno/ROSE2/declutter-reconstruct/code/binary_gt_map.png", gt_binary, cmap='gray')
+	#intersection = np.bitwise_and(map_binary, gt_binary)
+	for i in range(map_binary.shape[1]):
+		for j in range(map_binary.shape[0]):
+			if(map_binary[i,j] >= wall_white and gt_binary[i,j] >= wall_white):
+				intersection[i,j] = 255
+	print(intersection.shape)
+	plt.imsave("/Users/gabrielesomaschini/Documents/UNI/UNIMI/Tirocigno/ROSE2/declutter-reconstruct/code/intersection.png", intersection)
+	union = np.bitwise_or(map_binary, gt_binary)
+	plt.imsave(
+		"/Users/gabrielesomaschini/Documents/UNI/UNIMI/Tirocigno/ROSE2/declutter-reconstruct/code/union.png",union, cmap='gray')
+	jaccard_index = np.sum(intersection) / np.sum(union)
+	return jaccard_index
+"""
+walls: set of ExtendedSegment
+lines: set of ExtendedSegment
+compute the average distance between the walls and the associated lines
+"""
+def avg_distance_walls_lines(walls, lines, original_binary_map, dirs):
+	def distance_point_line(line, point_x, point_y):
+		return np.abs(
+			(line.y1 - line.y2) * point_x - (line.x1 - line.x2) * point_y + line.x1 * line.y2 - line.y1 * line.x2) / np.sqrt(
+			(line.y1 - line.y2) ** 2 + (line.x1 - line.x2) ** 2
+		)
+
+	def closest_line_to_point(x, y, lines):
+		cl_line = lines[0]
+		cl_line_dist = distance_point_line(cl_line, x, y)
+		for l in lines:
+			dist = distance_point_line(l, x, y)
+			if dist < cl_line_dist:
+				cl_line_dist = dist
+				cl_line = l
+		return cl_line, cl_line_dist
+
+	distances = []
+	tol = 0.1
+	filepath = "/Users/gabrielesomaschini/Documents/UNI/UNIMI/Tirocigno/ROSE2/declutter-reconstruct/code"
+	walls_without_out = remove_walls_outliers(walls, dirs)
+	pixels_to_walls = pixel_to_wall(original_binary_map, walls_without_out)
+	""""
+	if dirs is not None:
+		horiz_lines = lines_of_direction(lines, dirs[0])
+		dsg.draw_extended_lines(horiz_lines, walls, "horizontal_lines", original_binary_map.shape, filepath=filepath)
+		vert_lines = lines_of_direction(lines, dirs[1])
+		dsg.draw_extended_lines(vert_lines, walls, "vertical_lines", original_binary_map.shape, filepath=filepath)
+		print("Number of total lines: {}".format(len(lines)))
+		print("Number of horizontal lines: {}".format(len(horiz_lines)))
+		print("Number of vertical lines: {}".format(len(vert_lines)))
+	"""
+	for (x, y), wall in pixels_to_walls.items():
+		# evaluate using given directions from another map
+		"""
+		if dirs is not None:
+			wall_angle = abs(radiant_inclination(wall.x1, wall.y1, wall.x2, wall.y2))
+			if abs(wall_angle - dirs[0]) < tol:
+				line, distance = closest_line_to_point(x, y, horiz_lines)
+			else:
+				line, distance = closest_line_to_point(x, y, vert_lines)
+		"""
+		#evaluate using the same map
+		lines_spatial_clust = [l for l in lines if l.spatial_cluster == wall.spatial_cluster]
+		line = lines_spatial_clust[0]
+		distance = distance_point_line(line, x, y)
+		distances.append(distance)
+	return np.mean(distances)
+
+def pixel_to_wall(original_binary_map, walls):
+	mask = np.zeros_like(original_binary_map)
+	# wall color in the binary map
+	wall_white = 150
+	# Create a dictionary to associate each pixel with the wall that masked it
+	pixel_to_wall = {}
+	# Iterate through the detected lines and draw them on the mask while associating pixels
+	for wall in walls:
+		# Draw line segment on mask
+		cv2.line(mask, (int(wall.x1), int(wall.y1)), (int(wall.x2), int(wall.y2)), 255, 2)
+		# Iterate through the pixels covered by this line segment
+		for y in range(min(int(wall.y1), int(wall.y2)), max(int(wall.y1), int(wall.y2)) + 1):
+			for x in range(min(int(wall.x1), int(wall.x2)), max(int(wall.x1), int(wall.x2)) + 1):
+				# white perchè nelle mappe create automaticamente quello è il valore che corrisponde al bianco.
+				if (mask[y, x] == 255) and (original_binary_map[y, x] >= wall_white):
+					pixel_to_wall[(x, y)] = wall
+	return pixel_to_wall
+
+#remove walls that have an inclination that is too much different from the main directions,
+#this is decided by a threshold
+def remove_walls_outliers(walls, dirs):
+	tol = 0.2
+	walls_without_outl = []
+	for w in walls:
+		angle = abs(radiant_inclination(w.x1, w.y1, w.x2, w.y2))
+		if abs(angle - abs(dirs[0])) <= tol or abs(angle - abs(dirs[2])) <= tol:
+			walls_without_outl.append(w)
+	return walls_without_outl
+
+def distance_heat_map(lines, walls, filepath, original_map, original_binary_map, main_dirs):
+	def distance_point_line(line, point_x, point_y):
+		return np.abs(
+			(line.y1 - line.y2) * point_x - (
+						line.x1 - line.x2) * point_y + line.x1 * line.y2 - line.y1 * line.x2) / np.sqrt(
+			(line.y1 - line.y2) ** 2 + (line.x1 - line.x2) ** 2
+		)
+
+	max_distance = 0
+	min_distance = 0  # arbitrary
+	heatmapOriginal = original_map.copy()
+	if len(heatmapOriginal.shape) == 2:
+		heatmapOriginal = cv2.cvtColor(heatmapOriginal, cv2.COLOR_GRAY2RGB)
+	print("num of walls before {}".format(len(walls)))
+	walls = remove_walls_outliers(walls, main_dirs)
+	print("num of walls without outliers: {}".format(len(walls)))
+	pix_to_wall = pixel_to_wall(original_binary_map, walls)
+	for (x, y), wall in pix_to_wall.items():
+		# Get the associated line
+		lines_spatial_clust = [l for l in lines if l.spatial_cluster == wall.spatial_cluster]
+		line = lines_spatial_clust[0]
+		distance = distance_point_line(line, x, y)
+		# Calculate the distance of the pixel from the line using the point-line distance formula
+		if distance > max_distance:
+			max_distance = distance
+	colormap = plt.get_cmap('jet')
+	colormap = colormap.reversed()
+	heatmap = np.zeros_like(original_map, shape=(original_map.shape[0], original_map.shape[1], 3))
+	print('max distance: {}'.format(max_distance))
+	print('min distance: {}'.format(min_distance))
+	for (x, y), wall in pix_to_wall.items():
+		lines_spatial_clust = [l for l in lines if l.spatial_cluster == wall.spatial_cluster]
+		line = lines_spatial_clust[0]
+		distance = distance_point_line(line, x, y)
+		if max_distance == 0 and min_distance == 0:
+			normalized = 0
+		else:
+			normalized = (distance - min_distance) / (max_distance - min_distance)
+		# Map the distance to a color in the colormap
+		# normalized = distance/max_distance
+		color = colormap(normalized)
+		# Set the color in the heatmap
+		heatmapOriginal[y, x] = (color[0] * 255, color[1] * 255, color[2] * 255)
+		heatmap[y, x] = (color[0] * 255, color[1] * 255, color[2] * 255)
+	plt.imsave(os.path.join(filepath, 'heatmap.png'), heatmap)
+	plt.imsave(os.path.join(filepath, 'heatmap_on_original.png'), heatmapOriginal)
+	return heatmap
+"""
+OLD ONE, use distance_heat_map
 Calculate the distance heat map between walls and walls projections and draw it.
 walls_projections: array of walls projections calculated in the Segment.set_weights() file.
 pixel_to_wall:     a dictionary where each pixel that belongs to a wall gets associated with its wall.
@@ -12,8 +179,9 @@ pixel_to_wall:     a dictionary where each pixel that belongs to a wall gets ass
 the heat map is constructed finding the distance between each pixel and its wall_projection, colors are given
 using the jet colormap (dark red means near, dark blue means distant), normalizing it based on the maximum distance
 that has been computed using these pixels and walls.
+
 """
-def distance_heat_map(walls_projections, pixel_to_wall, filepath, original_map, name):
+def distance_heat_map_wall_proj(walls_projections, pixel_to_wall, filepath, original_map, name):
 	def distance_point_line(line, point_x, point_y):
 		return np.abs(
 			(line.y1 - line.y2) * point_x - (line.x1 - line.x2) * point_y + line.x1 * line.y2 - line.y1 * line.x2) / np.sqrt(
@@ -40,7 +208,10 @@ def distance_heat_map(walls_projections, pixel_to_wall, filepath, original_map, 
 	for (x, y), wall in pixel_to_wall.items():
 		line = [h for h in walls_projections if h.spatial_cluster == wall.spatial_cluster][0]
 		distance = distance_point_line(line, x, y)
-		normalized = (distance - min_distance) / (max_distance - min_distance)
+		if max_distance == 0 and min_distance == 0:
+			normalized = 0
+		else:
+			normalized = (distance - min_distance) / (max_distance - min_distance)
 		# Map the distance to a color in the colormap
 		#normalized = distance/max_distance
 		color = colormap(normalized)

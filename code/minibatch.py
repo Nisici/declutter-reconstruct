@@ -38,7 +38,7 @@ def final_routine(img_ini, param_obj, size, draw, extended_segments_th1_merged, 
         dsg.draw_rooms_on_map_prediction(img_ini, '8b_rooms_th1_on_map_prediction', size, filepath=filepath)
 
     if draw.rooms_on_map_lines:
-        dsg.draw_rooms_on_map_plus_lines(img_ini, extended_segments_th1_merged, '8b_rooms_th1_on_map_th1' + str(ind), size,
+        dsg.draw_rooms_on_map_plus_lines(img_ini, self.extended_segments_th1_merged, '8b_rooms_th1_on_map_th1' + str(ind), size,
                                          filepath=filepath)
     """
     # -------------------------------------POST-PROCESSING------------------------------------------------
@@ -80,7 +80,7 @@ class Minibatch:
         img_rgb = cv2.bitwise_not(orebro_img)
         # making a copy of original image
         img_ini = cv2.imread(path_obj.metric_map_path)
-
+        self.original_map = img_ini.copy()
         # -------------------------------------------------------------------------------------
 
         # -----------------------------1.1_CANNY AND HOUGH-------------------------------------
@@ -98,8 +98,9 @@ class Minibatch:
         lines = self.walls
         self.walls = lay.create_walls(lines)
         # BINARY MAP
-        original_binary_map = cv2.bitwise_not(img_ini)
-        original_binary_map = cv2.cvtColor(original_binary_map, cv2.COLOR_RGB2GRAY)
+        self.original_binary_map = cv2.bitwise_not(img_ini)
+        self.original_binary_map = cv2.cvtColor(self.original_binary_map, cv2.COLOR_RGB2GRAY)
+        plt.imsave(self.filepath + "binary_map.png", self.original_binary_map)
         if not self.param_obj.bormann:
             if draw.walls:
                 # draw Segments
@@ -231,68 +232,51 @@ class Minibatch:
             make_folder(self.filepath, 'Extended_Lines')
             dsg.draw_extended_lines(self.extended_segments, self.walls, '7a_extended_lines', self.size, filepath=self.filepath + '/Extended_Lines')
             # Create an empty mask with the same dimensions as the image
-        self.extended_segments, walls_projections = sg.set_weights(self.extended_segments, self.walls)
+        self.extended_segments, self.walls_projections = sg.set_weights(self.extended_segments, self.walls)
+        
+        # this is used to merge together the extended_segments that are very close each other.
+        extended_segments_merged = ExtendedSegment.merge_together(self.extended_segments, self.param_obj.distance_extended_segment, self.walls)
+        extended_segments_merged, walls_projections_merged = sg.set_weights(extended_segments_merged, self.walls)
+
+        """"
+        dsg.draw_hough_black(self.original_binary_map, lines, 'removedBadPixelsOriginal', size, filepath=filepath)
+        dsg.draw_hough_black(orebro_img, lines, 'removedBadPixelsClean', size, filepath=filepath)
+        correctedOriginal = plt.imread(filepath + 'removedBadPixelsOriginal.png')
+        correctedClean = plt.imread(filepath + 'removedBadPixelsClean.png')
+        correctedOriginal = cv2.cvtColor(correctedOriginal, cv2.COLOR_RGB2GRAY)
+        correctedClean = cv2.cvtColor(correctedClean, cv2.COLOR_RGB2GRAY)
+        dsg.draw_hough_segment_white(correctedOriginal, walls_projections, 'correctedOriginal', size, filepath=filepath)
+        dsg.draw_hough_segment_white(correctedClean, walls_projections, 'correctedClean', size, filepath=filepath)
+        """
+
+        # this is needed in order to maintain the extended lines of the offset STANDARD
+        border_lines = lay.set_weight_offset(extended_segments_merged, xmax, xmin, ymax, ymin)
+        self.extended_segments_th1_merged, ex_li_removed = sg.remove_less_representatives(extended_segments_merged, self.param_obj.th1)
+        if draw.extended_lines:
+            dsg.draw_extended_lines(extended_segments_merged, self.walls, '7a_extended_lines_merged', self.size,
+                                    filepath=self.filepath + '/Extended_Lines')
+            dsg.draw_extended_lines(self.extended_segments_th1_merged, self.walls, '7a_extended_lines_th1_merged', self.size, filepath=self.filepath + '/Extended_Lines')
+        lis = []
+        for line in ex_li_removed:
+            short_line = sg.create_short_ex_lines(line, self.walls, self.size, self.extended_segments_th1_merged)
+            if short_line is not None:
+                lis.append(short_line)
+
+        lis, _ = sg.set_weights(lis, self.walls)
+        lis, _ = sg.remove_less_representatives(lis, 0.1)
+        for el in lis:
+            self.extended_segments_th1_merged.append(el)
+        
+        if draw.extended_lines:
+            dsg.draw_extended_lines(self.extended_segments_th1_merged, self.walls, '7a_extended_lines_merged_plus_small', self.size, filepath=self.filepath + '/Extended_Lines')
+
+
         if not self.param_obj.stop_after_lines:
-        #######DRAW WALLS WITH HOUGH AND MASK ORIGINAL IMAGE#########
-            mask = np.zeros_like(original_binary_map)
-            #wall color in the binary map
-            wall_white = 150
-            # Create a dictionary to associate each pixel with the wall that masked it
-            pixel_to_wall = {}
-            # Iterate through the detected lines and draw them on the mask while associating pixels
-            for wall in walls:
-                # Draw line segment on mask
-                cv2.line(mask, (int(wall.x1), int(wall.y1)), (int(wall.x2), int(wall.y2)), 255, 2)
-                # Iterate through the pixels covered by this line segment
-                for y in range(min(int(wall.y1), int(wall.y2)), max(int(wall.y1), int(wall.y2)) + 1):
-                    for x in range(min(int(wall.x1), int(wall.x2)), max(int(wall.x1), int(wall.x2)) + 1):
-                        #white perchè nelle mappe create automaticamente quello è il valore che corrisponde al bianco.
-                        if (mask[y, x] == 255) and (original_binary_map[y, x] >= wall_white):
-                            pixel_to_wall[(x, y)] = wall
-            plt.imsave(filepath + "binary.png", original_binary_map, cmap="gray")
-            cv2.imwrite(filepath + "masked_image.jpg", mask)
-            #masked_image = cv2.bitwise_and(orebro_img, orebro_img, mask=mask)
-            #cv2.imwrite(filepath + "masked_image.jpg", masked_image)
-            #DRAW HEATMAP OF WALL PROJECTIONS
-            mp.distance_heat_map(walls_projections, pixel_to_wall, filepath, img_ini, 'distance_heatmap')
-            mp.angular_heatmap(walls_projections, pixel_to_wall, filepath, original_binary_map, 'angular_heatmap')
-            #mp.angular_heatmap_cluster(walls_projections, pixel_to_wall, filepath, original_binary_map, 'angular_heatmap_cluster')
-            dsg.draw_walls(walls_projections, "wall_projections", size, filepath=filepath)
-            # this is used to merge together the extended_segments that are very close each other.
-            extended_segments_merged = ExtendedSegment.merge_together(self.extended_segments, self.param_obj.distance_extended_segment, walls)
-            extended_segments_merged, walls_projections_merged = sg.set_weights(extended_segments_merged, walls)
-
-            """"
-            dsg.draw_hough_black(original_binary_map, lines, 'removedBadPixelsOriginal', size, filepath=filepath)
-            dsg.draw_hough_black(orebro_img, lines, 'removedBadPixelsClean', size, filepath=filepath)
-            correctedOriginal = plt.imread(filepath + 'removedBadPixelsOriginal.png')
-            correctedClean = plt.imread(filepath + 'removedBadPixelsClean.png')
-            correctedOriginal = cv2.cvtColor(correctedOriginal, cv2.COLOR_RGB2GRAY)
-            correctedClean = cv2.cvtColor(correctedClean, cv2.COLOR_RGB2GRAY)
-            dsg.draw_hough_segment_white(correctedOriginal, walls_projections, 'correctedOriginal', size, filepath=filepath)
-            dsg.draw_hough_segment_white(correctedClean, walls_projections, 'correctedClean', size, filepath=filepath)
-            """
-
-            # this is needed in order to maintain the extended lines of the offset STANDARD
-            border_lines = lay.set_weight_offset(extended_segments_merged, xmax, xmin, ymax, ymin)
-            extended_segments_th1_merged, ex_li_removed = sg.remove_less_representatives(extended_segments_merged, self.param_obj.th1)
-            if draw.extended_lines:
-                dsg.draw_extended_lines(extended_segments_merged, walls, '7a_extended_lines_merged', size,
-                                        filepath=filepath + '/Extended_Lines')
-                dsg.draw_extended_lines(extended_segments_th1_merged, walls, '7a_extended_lines_th1_merged', size, filepath=filepath + '/Extended_Lines')
-            lis = []
-            for line in ex_li_removed:
-                short_line = sg.create_short_ex_lines(line, walls, size, extended_segments_th1_merged)
-                if short_line is not None:
-                    lis.append(short_line)
-
-            lis, _ = sg.set_weights(lis, walls)
-            lis, _ = sg.remove_less_representatives(lis, 0.1)
-            for el in lis:
-                extended_segments_th1_merged.append(el)
-
-            if draw.extended_lines:
-                dsg.draw_extended_lines(extended_segments_th1_merged, walls, '7a_extended_lines_merged_plus_small', size, filepath=filepath + '/Extended_Lines')
+            # DRAW HEATMAP OF WALL PROJECTIONS
+            mp.distance_heat_map(self.walls_projections, pixel_to_wall, filepath, img_ini, 'distance_heatmap')
+            mp.angular_heatmap(self.walls_projections, pixel_to_wall, filepath, self.original_binary_map, 'angular_heatmap')
+            # mp.angular_heatmap_cluster(walls_projections, pixel_to_wall, filepath, self.original_binary_map, 'angular_heatmap_cluster')
+            dsg.draw_walls(self.walls_projections, "wall_projections", size, filepath=filepath)
 
             # -------------------------------------------------------------------------------------
 
@@ -301,7 +285,7 @@ class Minibatch:
             # creating edges as intersection between extended lines
 
             edges = sg.create_edges(self.extended_segments)
-            edges_th1 = sg.create_edges(extended_segments_th1_merged)
+            edges_th1 = sg.create_edges(self.extended_segments_th1_merged)
             # sg.set_weight_offset_edges(border_lines, edges_th1)
 
             # -------------------------------------------------------------------------------------
@@ -380,7 +364,7 @@ class Minibatch:
             ind = 0
 
             segmentation_map_path_post, colors = final_routine( img_ini, self.param_obj, size, draw,
-                                                               extended_segments_th1_merged, ind, rooms_th1, filepath=filepath)
+                                                               self.extended_segments_th1_merged, ind, rooms_th1, filepath=filepath)
             old_colors = []
             voronoi_graph, coordinates = vr.compute_voronoi_graph(path_obj.metric_map_path, self.param_obj,
                                                                   False, '', self.param_obj.bormann, filepath=filepath)
@@ -389,7 +373,7 @@ class Minibatch:
                 old_colors = colors
                 vr.voronoi_segmentation(patches, colors_th1, size, voronoi_graph, coordinates, self.param_obj.comp, path_obj.metric_map_path, ind, filepath=filepath)
                 segmentation_map_path_post, colors = final_routine(img_ini, self.param_obj, size, draw,
-                                                                   extended_segments_th1_merged, ind, rooms_th1, filepath=filepath)
+                                                                   self.extended_segments_th1_merged, ind, rooms_th1, filepath=filepath)
             rooms_th1 = make_rooms(patches)
             colors_final = []
             print(len(rooms_th1))
