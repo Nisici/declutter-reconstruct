@@ -391,6 +391,7 @@ class FFTStructureExtraction:
 
         self.analysed_map = self.binary_map.copy()
         self.analysed_map[np.abs(self.map_scored_good) < self.cluster_quality_threshold] = 0.0
+
         print("OK ({0:.2f})".format(time.time() - t))
 
     def generate_initial_hypothesis_direction_with_kde(self, lines_long, max_len, bandwidth, cutoff_percent, cell_tr,

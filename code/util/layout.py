@@ -8,7 +8,7 @@ import numpy
 from shapely.geometry import Polygon
 from shapely.ops import cascaded_union
 from sklearn.cluster import DBSCAN
-
+import PIL
 import util.matrice as mtx
 from object import ExtendedSegment as ext
 from object import Line as rt
@@ -21,6 +21,8 @@ import os
 from skimage import io
 import numpy as np
 from matplotlib import pyplot as plt
+import util.disegna as dsg
+from skimage.segmentation import flood, flood_fill
 
 def start_canny_and_hough(image, param_obj):
 	image_2 = cv2.cvtColor(image.copy(), cv2.COLOR_BGR2GRAY)
@@ -70,11 +72,33 @@ def external_contour(img_rgb):
 		img_gray = cv2.cvtColor(img_rgb, cv2.COLOR_BGR2GRAY)
 	else:
 		img_gray = img_rgb.copy()
+	plt.imsave(
+		"/Users/gabrielesomaschini/Documents/UNI/UNIMI/Tirocigno/ROSE2/declutter-reconstruct/code/img_gray.png",
+		img_gray, cmap='gray')
+	""""
+	FLOOD FILL TEST
+	plt.imsave(
+		"/Users/gabrielesomaschini/Documents/UNI/UNIMI/Tirocigno/ROSE2/declutter-reconstruct/code/img_gray.png",
+		img_gray, cmap='gray')
+	black_pixels = np.argwhere(img_gray == 0)
+	god_coord = (679,643)
+	img_gray = flood_fill(img_gray, god_coord, 255, tolerance=10)
+	plt.imsave(
+		"/Users/gabrielesomaschini/Documents/UNI/UNIMI/Tirocigno/ROSE2/declutter-reconstruct/code/img_flooded.png",
+		img_gray, cmap='gray')
+	"""
+	size = (img_rgb.shape[1], img_rgb.shape[0])
+	filepath = "/Users/gabrielesomaschini/Documents/UNI/UNIMI/Tirocigno/ROSE2/declutter-reconstruct/code/contours/"
 	# highlighting all the pixels with value > 253
 	ret, thresh = cv2.threshold(img_gray.copy(), 253, 255, cv2.THRESH_BINARY_INV)
+	"""
+	plt.imsave(
+		"/Users/gabrielesomaschini/Documents/UNI/UNIMI/Tirocigno/ROSE2/declutter-reconstruct/code/binary_map.png",
+		thresh, cmap='gray')
+	"""
 	if cv2.__version__[0] == '3':
 		# finding all the contours of this image
-		img_contour, contours, hierarchy = cv2.findContours(thresh.copy(), cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+		img_contour, contours, hierarchy = cv2.findContours(thresh.copy(), cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE )
 		# removing the external contour, the rectangular shape of the image
 		contours = list(contours)
 		contours.pop(0)
@@ -92,16 +116,40 @@ def external_contour(img_rgb):
 		# draw all this contours
 		img_contour = cv2.drawContours(thresh.copy(), contours, -1, (0, 255, 0), 3, cv2.LINE_8)
 		# finding all the contours of this new image found with cv2.drawContours()
-		contours, hierarchy = cv2.findContours(img_contour, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+		contours, hierarchy = cv2.findContours(img_contour.copy(), cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+		img_contour2 = cv2.drawContours(img_contour.copy(), contours, -1, (0, 255, 0), 3, cv2.LINE_8)
+		"""
+		plt.imsave(
+			filepath + "contour_before.png",
+			img_contour2)
+		"""
 	else:
 		raise EnvironmentError('Opencv Version Error. You should have OpenCv 3.* or Opencv 4.*')
+	#TAKE ALL CONTOURS AND CONVEX HULL
+	contours = sorted(contours, key=cv2.contourArea, reverse=True)[:]
+	contours.pop(0) #remove max contour
+	all_vertices = []
+	#i = 0
+	for contour in contours:
+		perimeter = cv2.arcLength(contour, True)
+		approx = cv2.approxPolyDP(contour, 0.0002 * perimeter, True)
+		vertices = []
+		for c in approx:
+			vertices.append([np.float32(c[0][0]), np.float32(c[0][1])])
+		#dsg.draw_contour(vertices, "contour_{}".format(i), size, filepath=filepath)
+		#i += 1
+		all_vertices.extend(vertices)
+	conv_hull = cv2.convexHull(np.array(all_vertices))
+	vertices_conv_hull = []
+	for c in conv_hull:
+		vertices_conv_hull.append([float(c[0][0]), float(c[0][1])])
+	#dsg.draw_contour(vertices_conv_hull, "convex_hull", size, filepath=filepath)
 
 	contours = sorted(contours, key=cv2.contourArea, reverse=True)[:10]
-	contours_max = contours[1]
+	contours_max = contours[0]
 	perimeter = cv2.arcLength(contours_max, True)
 	approx = cv2.approxPolyDP(contours_max, 0.0002 * perimeter, True)
 	screen_cnt = approx
-
 	# flip the contour
 	# for c in screen_cnt:
 		# c[0][1] = img_rgb.shape[0]-1 - c[0][1]
@@ -109,8 +157,7 @@ def external_contour(img_rgb):
 	vertices = []
 	for c in screen_cnt:
 		vertices.append([float(c[0][0]), float(c[0][1])])
-
-	return screen_cnt, vertices
+	return screen_cnt, vertices, contours
 
 
 def cluster_ang(h, min_offset, walls, num_min=3, min_lenght=3, diagonals=True):

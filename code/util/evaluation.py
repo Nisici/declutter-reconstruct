@@ -6,6 +6,11 @@ import tabulate
 import matplotlib.pyplot as plt
 
 from PIL import Image
+import sys
+
+from os.path import dirname, abspath
+d = dirname(dirname(abspath(__file__)))
+sys.path.insert(1, os.path.join(sys.path[0], d))
 import parameters as p
 
 
@@ -305,18 +310,22 @@ def evaluate_bormann(map_name, dir_name, par):
 
 def main():
     map_names = ['photo_2020-01-08_09-53-31', 'freiburg_building101', 'freiburg_building52', 'g4s_y2', 'map15', 'map17',
-                 'map23', 'map_with_clutter', 'NOGT-intel_map', 'ubremen-cartesium-demo4', 'freiburg_building79']
+                 'map23', 'map_with_clutter', 'NOGT-intel_map', 'ubremen-cartesium-demo4', 'Freiburg_Building_079']
+    output_path = './data/OUTPUT/evaluation_borman/'
+    if not os.path.exists(output_path):
+        os.mkdir(output_path)
     for map in map_names:
-        output_path = './../data/OUTPUT/evaluation_borman/' + map
-        input_seg_path = '../data/INPUT/IMGs/other_methods/'
+        output_path = './data/OUTPUT/evaluation_borman/' + map
+        input_seg_path = './data/INPUT/IMGs/other_methods/'
         if not os.path.exists(output_path):
             os.mkdir(output_path)
-        gt_map = './../data/INPUT/gt_colored/' + map + '.png'
+        gt_map = './data/INPUT/IMGs/gt_colored/' + map
         par = p.ParameterObj()
         if os.path.exists(gt_map):
             for i in range(0, 3):
                 if i == 0:
                     segmentation_map = input_seg_path + map + '_segmented_1morphological.png'
+                    print(segmentation_map)
                     if os.path.exists(segmentation_map):
                         name = '_1morphological'
                         evaluation(gt_map, segmentation_map, par, name, False, filepath=output_path)

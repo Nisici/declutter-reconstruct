@@ -11,7 +11,7 @@ import minibatch
 import FFT_MQ as fft
 from matplotlib import pyplot as plt
 from util.map_evaluation import avg_distance_walls_lines
-from util.map_evaluation import distance_heat_map, pixel_to_wall
+from util.map_evaluation import distance_heat_map, pixel_to_wall, map_metric
 
 import re
 def natural_sort_key(s):
@@ -46,8 +46,6 @@ def plot_incremental_dirs_manhattan(dirs, filepath):
     y = []
     for dir in dirs:
         print("dir1: {}, dir2: {}".format(dir[0], dir[2]))
-        dir[0] = abs(dir[0])
-        dir[2] = abs(dir[2])
         angle = abs(dir[0] - dir[2])
         deg1 = dir[0] * 180 / np.pi
         deg2 = dir[2] * 180 / np.pi
@@ -68,6 +66,11 @@ def plot_incremental_walls_distances(distances, filepath):
     plt.plot(x, distances)
     plt.savefig(filepath + "/" + "wall_distances.png")
 
+def plot_incremental_metric(metrics, filepath):
+    x = np.arange(0, len(metrics))
+    plt.figure(figsize=(8,6))
+    plt.plot(x, metrics)
+    plt.savefig(filepath + "/" + "metrics.png")
 def main():
     # ----------------PARAMETERS OBJECTS------------------------
     # loading parameters from parameters.py
@@ -99,7 +102,7 @@ def main():
     # apply rose to every map in directory
     directions = []
     distances = []
-
+    metrics = []
     for root, dirs, files in os.walk(paths.path_folder_input):
         for file in sorted(files, key=natural_sort_key):
             paths.metric_map_name = file
@@ -110,9 +113,12 @@ def main():
             else:
                 rose = start_main(parameters_object, paths)
                 directions.append(rose.param_obj.comp)
-                avg_dist = avg_distance_walls_lines(rose.walls, rose.extended_segments_th1_merged, rose.original_binary_map, rose.param_obj.comp)
-                distance_heat_map(rose.extended_segments, rose.walls,  paths.filepath , rose.original_map, rose.original_binary_map, rose.param_obj.comp)
+                dirs = [rose.param_obj.comp[0], rose.param_obj.comp[2]]
+                avg_dist = avg_distance_walls_lines(rose.walls, rose.extended_segments, rose.original_binary_map, dirs)
+                metric = map_metric(rose)
+                distance_heat_map(rose.extended_segments, rose.walls,  paths.filepath , rose.original_map, rose.original_binary_map, dirs)
                 distances.append(avg_dist)
+                metrics.append(metric)
     #save directions in file
     with open(paths.path_folder_output + "/" + "directions.txt", 'w') as file:
         for dirs in directions:
@@ -122,7 +128,7 @@ def main():
             file.write("wall dist: {}\n".format(dist))
     plot_incremental_dirs_manhattan(directions, paths.path_folder_output)
     plot_incremental_walls_distances(distances, paths.path_folder_output)
-
+    plot_incremental_metric(metrics, paths.path_folder_output)
 def start_main(parameters_object, paths):
 
     # -------------------EXECUTION---------------------------------------

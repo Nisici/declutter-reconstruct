@@ -303,7 +303,7 @@ def compute_voronoi_graph(origin, param_obj, only_graph, name, bormann, filepath
     im = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
     im = cv2.threshold(im, 230, 255, cv2.THRESH_BINARY)[1]
     im = cv2.bitwise_not(im)
-    cv2.imwrite('tmp.png', im, [cv2.IMWRITE_PNG_COMPRESSION])
+    cv2.imwrite('tmp.png', im, [cv2.IMWRITE_PNG_COMPRESSION, 1])
     initial_map = img_as_bool(io.imread('tmp.png'))
     os.remove('tmp.png')
 

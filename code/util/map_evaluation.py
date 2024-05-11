@@ -10,40 +10,46 @@ from util.feature_matching import lines_of_direction
 from skimage.metrics import structural_similarity
 from sklearn.metrics import jaccard_score
 import os
-"""
-returns structural similarity between map and groundtruth
-"""
-def similarity_gt(map, gt):
-	map = np.squeeze(map)
-	gt = np.squeeze(gt)
-	return structural_similarity(map, gt)
+from util.disegna import draw_contour
+from util.layout import external_contour
+# our metric, when jaccard_idx = 1 it means we are not removing any part of the original image
+# M = exp(alpha) * avg_dist
+def map_metric(rose, jaccard_idx=1):
+	dirs = [rose.param_obj.comp[0], rose.param_obj.comp[2]]
+	angle = abs(dirs[0] - dirs[1])
+	alpha = abs(np.pi/2 - angle)*180/np.pi
+	avg_dist = avg_distance_walls_lines(rose.walls, rose.extended_segments, rose.original_binary_map, dirs)
+	print("Alpha: {}".format(alpha))
+	print("Avg dist: {}".format(avg_dist))
+	M = np.e**(alpha) * avg_dist / jaccard_idx
+	return M
 
-def jaccard_idx(map, gt):
-	map_binary = cv2.bitwise_not(map)
-	gt_binary = cv2.bitwise_not(gt)
-	intersection = np.zeros_like(map_binary)
-	intersection = cv2.bitwise_not(intersection)
+# vertices is the output of layout.external_contour
+def area_of_vertices(vertices):
+	x = [v[0] for v in vertices]
+	y = [v[1] for v in vertices]
+	area = 0.5 * np.abs(np.dot(x, np.roll(y, 1)) - np.dot(y, np.roll(x, 1)))
+	return area
 
-	# wall color in the binary map
-	wall_white = 150
-	plt.imsave("/Users/gabrielesomaschini/Documents/UNI/UNIMI/Tirocigno/ROSE2/declutter-reconstruct/code/binary_map.png", map_binary, cmap='gray')
-	plt.imsave("/Users/gabrielesomaschini/Documents/UNI/UNIMI/Tirocigno/ROSE2/declutter-reconstruct/code/binary_gt_map.png", gt_binary, cmap='gray')
-	#intersection = np.bitwise_and(map_binary, gt_binary)
-	for i in range(map_binary.shape[1]):
-		for j in range(map_binary.shape[0]):
-			if(map_binary[i,j] >= wall_white and gt_binary[i,j] >= wall_white):
-				intersection[i,j] = 255
-	print(intersection.shape)
-	plt.imsave("/Users/gabrielesomaschini/Documents/UNI/UNIMI/Tirocigno/ROSE2/declutter-reconstruct/code/intersection.png", intersection)
-	union = np.bitwise_or(map_binary, gt_binary)
-	plt.imsave(
-		"/Users/gabrielesomaschini/Documents/UNI/UNIMI/Tirocigno/ROSE2/declutter-reconstruct/code/union.png",union, cmap='gray')
-	jaccard_index = np.sum(intersection) / np.sum(union)
-	return jaccard_index
+# jaccard idx := |A∩B|/|AUB| where A∩B is the decluttered map contour area and AUB is the original map contour area
+def jaccard_idx(map_binary, decluttered_map):
+	# to work decluttered_map should have the pixels out of the contour in gray color, like the binary image of the original map.
+	# go to fft_structure_extraction.py and make the decluttered_map have same color distribution as the original image:
+	# light gray in background, black edges and white the inside of the indoor environment.
+
+	screen_cnt_decl, vertices_decl = external_contour(decluttered_map)
+	screen_cnt_original, vertices_original = external_contour(map_binary)
+	dsg.draw_contour(vertices_original, 'original_contour', map_binary.shape)
+	dsg.draw_contour(vertices_decl, 'decl_contour', map_binary.shape)
+	area_decl = area_of_vertices(screen_cnt_decl)
+	area_original = area_of_vertices(screen_cnt_original)
+	return area_decl / area_original
+
 """
 walls: set of ExtendedSegment
 lines: set of ExtendedSegment
-compute the average distance between the walls and the associated lines
+compute the average distance between the walls and the associated lines.
+sum(dist_pixel
 """
 def avg_distance_walls_lines(walls, lines, original_binary_map, dirs):
 	def distance_point_line(line, point_x, point_y):
@@ -119,7 +125,7 @@ def remove_walls_outliers(walls, dirs):
 	walls_without_outl = []
 	for w in walls:
 		angle = abs(radiant_inclination(w.x1, w.y1, w.x2, w.y2))
-		if abs(angle - abs(dirs[0])) <= tol or abs(angle - abs(dirs[2])) <= tol:
+		if abs(angle - abs(dirs[0])) <= tol or abs(angle - abs(dirs[1])) <= tol:
 			walls_without_outl.append(w)
 	return walls_without_outl
 
@@ -136,13 +142,13 @@ def distance_heat_map(lines, walls, filepath, original_map, original_binary_map,
 	heatmapOriginal = original_map.copy()
 	if len(heatmapOriginal.shape) == 2:
 		heatmapOriginal = cv2.cvtColor(heatmapOriginal, cv2.COLOR_GRAY2RGB)
-	print("num of walls before {}".format(len(walls)))
 	walls = remove_walls_outliers(walls, main_dirs)
-	print("num of walls without outliers: {}".format(len(walls)))
 	pix_to_wall = pixel_to_wall(original_binary_map, walls)
 	for (x, y), wall in pix_to_wall.items():
 		# Get the associated line
 		lines_spatial_clust = [l for l in lines if l.spatial_cluster == wall.spatial_cluster]
+		if len(lines_spatial_clust) > 1:
+			print("Number of lines associated with this wall: {}".format(len(lines_spatial_clust)))
 		line = lines_spatial_clust[0]
 		distance = distance_point_line(line, x, y)
 		# Calculate the distance of the pixel from the line using the point-line distance formula
@@ -151,8 +157,6 @@ def distance_heat_map(lines, walls, filepath, original_map, original_binary_map,
 	colormap = plt.get_cmap('jet')
 	colormap = colormap.reversed()
 	heatmap = np.zeros_like(original_map, shape=(original_map.shape[0], original_map.shape[1], 3))
-	print('max distance: {}'.format(max_distance))
-	print('min distance: {}'.format(min_distance))
 	for (x, y), wall in pix_to_wall.items():
 		lines_spatial_clust = [l for l in lines if l.spatial_cluster == wall.spatial_cluster]
 		line = lines_spatial_clust[0]
@@ -170,6 +174,8 @@ def distance_heat_map(lines, walls, filepath, original_map, original_binary_map,
 	plt.imsave(os.path.join(filepath, 'heatmap.png'), heatmap)
 	plt.imsave(os.path.join(filepath, 'heatmap_on_original.png'), heatmapOriginal)
 	return heatmap
+
+
 """
 OLD ONE, use distance_heat_map
 Calculate the distance heat map between walls and walls projections and draw it.

@@ -44,7 +44,7 @@ def main(path_to_image, path_to_folder, filter_level, par):
         comp.append(p1)
     par.comp = comp
 
-    visualisation = {"Binary map": True,
+    visualisation = {"Binary map": False,
                      "FFT Spectrum": False,
                      "Unfolded FFT Spectrum": False,
                      "FFT Spectrum Signal": False,

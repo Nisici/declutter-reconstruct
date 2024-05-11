@@ -43,7 +43,7 @@ def final_routine(img_ini, param_obj, size, draw, extended_segments_th1_merged, 
     """
     # -------------------------------------POST-PROCESSING------------------------------------------------
 
-    segmentation_map_path_post, colors = post.oversegmentation(segmentation_map_path, self.param_obj.th_post, filepath=filepath)
+    segmentation_map_path_post, colors = post.oversegmentation(segmentation_map_path, param_obj.th_post, filepath=filepath)
     return segmentation_map_path_post, colors
 
 # map1 - map2
@@ -73,11 +73,11 @@ class Minibatch:
         # ----------------------------1.0_LAYOUT OF ROOMS------------------------------------
         # ------ starting layout
         # read the original image
-        orebro_img = cv2.imread(path_obj.orebro_img)
-        width = orebro_img.shape[1]
-        height = orebro_img.shape[0]
+        self.orebro_img = cv2.imread(path_obj.orebro_img)
+        width = self.orebro_img.shape[1]
+        height = self.orebro_img.shape[0]
         self.size = [width, height]
-        img_rgb = cv2.bitwise_not(orebro_img)
+        img_rgb = cv2.bitwise_not(self.orebro_img)
         # making a copy of original image
         img_ini = cv2.imread(path_obj.metric_map_path)
         self.original_map = img_ini.copy()
@@ -180,7 +180,7 @@ class Minibatch:
         # ---------------1.3 EXTERNAL CONTOUR--------------------------------------------------
 
         img_cont = cv2.imread(path_obj.metric_map_path)
-        (contours, self.vertices) = lay.external_contour(img_cont)
+        (contours, self.vertices, _) = lay.external_contour(img_cont)
 
         if draw.contour:
             dsg.draw_contour(self.vertices, '4_Contour', self.size, filepath=self.filepath)
@@ -235,8 +235,21 @@ class Minibatch:
         self.extended_segments, self.walls_projections = sg.set_weights(self.extended_segments, self.walls)
         
         # this is used to merge together the extended_segments that are very close each other.
-        extended_segments_merged = ExtendedSegment.merge_together(self.extended_segments, self.param_obj.distance_extended_segment, self.walls)
-        extended_segments_merged, walls_projections_merged = sg.set_weights(extended_segments_merged, self.walls)
+        # these are the walls after you merge the extended segments, they differ from self.walls by the cluster
+        self.walls_merged = []
+        for w in self.walls:
+            w2 = sg.Segment(w.x1, w.y1,w.x2, w.y2)
+            w2.num_faces = w.num_faces
+            w2.spatial_cluster = w.spatial_cluster
+            w2.wall_cluster = w.wall_cluster
+            w2.angular_cluster = w.angular_cluster
+            w2.cluster_index = w.cluster_index
+            w2.weight = w.weight
+            w2.direction = w.direction
+            w2.branch = w.branch
+            self.walls_merged.append(w2)
+        extended_segments_merged = ExtendedSegment.merge_together(self.extended_segments, self.param_obj.distance_extended_segment, self.walls_merged)
+        extended_segments_merged, walls_projections_merged = sg.set_weights(extended_segments_merged, self.walls_merged)
 
         """"
         dsg.draw_hough_black(self.original_binary_map, lines, 'removedBadPixelsOriginal', size, filepath=filepath)
@@ -253,30 +266,32 @@ class Minibatch:
         border_lines = lay.set_weight_offset(extended_segments_merged, xmax, xmin, ymax, ymin)
         self.extended_segments_th1_merged, ex_li_removed = sg.remove_less_representatives(extended_segments_merged, self.param_obj.th1)
         if draw.extended_lines:
-            dsg.draw_extended_lines(extended_segments_merged, self.walls, '7a_extended_lines_merged', self.size,
+            dsg.draw_extended_lines(extended_segments_merged, self.walls_merged, '7a_extended_lines_merged', self.size,
                                     filepath=self.filepath + '/Extended_Lines')
-            dsg.draw_extended_lines(self.extended_segments_th1_merged, self.walls, '7a_extended_lines_th1_merged', self.size, filepath=self.filepath + '/Extended_Lines')
+            dsg.draw_extended_lines(self.extended_segments_th1_merged, self.walls_merged, '7a_extended_lines_th1_merged', self.size, filepath=self.filepath + '/Extended_Lines')
         lis = []
         for line in ex_li_removed:
-            short_line = sg.create_short_ex_lines(line, self.walls, self.size, self.extended_segments_th1_merged)
+            short_line = sg.create_short_ex_lines(line, self.walls_merged, self.size, self.extended_segments_th1_merged)
             if short_line is not None:
                 lis.append(short_line)
 
-        lis, _ = sg.set_weights(lis, self.walls)
+        lis, _ = sg.set_weights(lis, self.walls_merged)
         lis, _ = sg.remove_less_representatives(lis, 0.1)
         for el in lis:
             self.extended_segments_th1_merged.append(el)
         
         if draw.extended_lines:
-            dsg.draw_extended_lines(self.extended_segments_th1_merged, self.walls, '7a_extended_lines_merged_plus_small', self.size, filepath=self.filepath + '/Extended_Lines')
+            dsg.draw_extended_lines(self.extended_segments_th1_merged, self.walls_merged, '7a_extended_lines_merged_plus_small', self.size, filepath=self.filepath + '/Extended_Lines')
 
 
         if not self.param_obj.stop_after_lines:
             # DRAW HEATMAP OF WALL PROJECTIONS
-            mp.distance_heat_map(self.walls_projections, pixel_to_wall, filepath, img_ini, 'distance_heatmap')
-            mp.angular_heatmap(self.walls_projections, pixel_to_wall, filepath, self.original_binary_map, 'angular_heatmap')
-            # mp.angular_heatmap_cluster(walls_projections, pixel_to_wall, filepath, self.original_binary_map, 'angular_heatmap_cluster')
+            """
+            mp.distance_heat_map(self.walls_projections, self.pixel_to_wall, filepath, img_ini, 'distance_heatmap')
+            mp.angular_heatmap(self.walls_projections, self.pixel_to_wall, filepath, self.original_binary_map, 'angular_heatmap')
+            # mp.angular_heatmap_cluster(walls_projections, self.pixel_to_wall, filepath, self.original_binary_map, 'angular_heatmap_cluster')
             dsg.draw_walls(self.walls_projections, "wall_projections", size, filepath=filepath)
+            """
 
             # -------------------------------------------------------------------------------------
 
@@ -292,15 +307,15 @@ class Minibatch:
 
             # ---------------------------1.8_SET EDGES WEIGHTS-------------------------------------
 
-            edges, _ = sg.set_weights(edges, walls)
-            edges_th1, _ = sg.set_weights(edges_th1, walls)
+            edges, _ = sg.set_weights(edges, self.walls)
+            edges_th1, _ = sg.set_weights(edges_th1, self.walls)
 
             if draw.edges:
-                make_folder(filepath, 'Edges')
-                dsg.draw_edges(edges, walls, -1, '7c_edges', size, filepath=filepath + '/Edges')
-                dsg.draw_edges(edges, walls, self.param_obj.threshold_edges, '7c_edges_weighted', size, filepath=filepath + '/Edges')
-                dsg.draw_edges(edges_th1, walls, -1, '7c_edges_th1', size, filepath=filepath + '/Edges')
-                dsg.draw_edges(edges_th1, walls, self.param_obj.threshold_edges, '7c_edges_th1_weighted', size, filepath=filepath + '/Edges')
+                make_folder(self.filepath, 'Edges')
+                dsg.draw_edges(edges, self.walls, -1, '7c_edges', self.size, filepath=self.filepath + '/Edges')
+                dsg.draw_edges(edges, self.walls, self.param_obj.threshold_edges, '7c_edges_weighted', self.size, filepath=self.filepath + '/Edges')
+                dsg.draw_edges(edges_th1, self.walls, -1, '7c_edges_th1', self.size, filepath=self.filepath + '/Edges')
+                dsg.draw_edges(edges_th1, self.walls, self.param_obj.threshold_edges, '7c_edges_th1_weighted', self.size, filepath=self.filepath + '/Edges')
             # -------------------------------------------------------------------------------------
 
             # ----------------------------1.9_CREATE CELLS-----------------------------------------
@@ -324,7 +339,7 @@ class Minibatch:
             (cells_polygons_th1, polygon_out_th1, polygon_partial_th1, centroid_th1) = lay.create_polygon(cells_th1, cells_out_th1,cells_partials_th1)
 
             if draw.cells_in_out:
-                dsg.draw_cells(cells_polygons_th1, polygon_out_th1, polygon_partial_th1, '8a_cells_in_out_partial_th1', size, filepath=filepath)
+                dsg.draw_cells(cells_polygons_th1, polygon_out_th1, polygon_partial_th1, '8a_cells_in_out_partial_th1', self.size, filepath=self.filepath)
 
             # ----------------------MATRICES L, D, D^-1, ED M = D^-1 * L--------------------------
 
@@ -337,7 +352,7 @@ class Minibatch:
             cluster_cells_th1 = lay.DB_scan(self.param_obj.eps, self.param_obj.minPts, X_th1, cells_polygons_th1)
 
             if draw.dbscan:
-                colors_th1, fig, ax = dsg.draw_dbscan(cluster_cells_th1, cells_th1, cells_polygons_th1, edges_th1, contours, '7b_DBSCAN_th1', size, filepath=filepath)
+                colors_th1, fig, ax = dsg.draw_dbscan(cluster_cells_th1, cells_th1, cells_polygons_th1, edges_th1, contours, '7b_DBSCAN_th1', self.size, filepath=self.filepath)
 
             # -------------------------------------------------------------------------------------
 
@@ -355,37 +370,37 @@ class Minibatch:
             polygon_out_th1 = lay.get_out_polygons(cells_out_th1)
 
             if draw.sides:
-                dsg.draw_sides(edges_th1, '14a_sides_th1', size, filepath=filepath)
+                dsg.draw_sides(edges_th1, '14a_sides_th1', self.size, filepath=self.filepath)
             if draw.rooms:
-                fig, ax, patches = dsg.draw_rooms(rooms_th1, colors_th1, '8b_rooms_th1', size, filepath=filepath)
+                fig, ax, patches = dsg.draw_rooms(rooms_th1, colors_th1, '8b_rooms_th1', self.size, filepath=self.filepath)
 
             # ---------------------------------END LAYOUT------------------------------------------
 
             ind = 0
 
-            segmentation_map_path_post, colors = final_routine( img_ini, self.param_obj, size, draw,
-                                                               self.extended_segments_th1_merged, ind, rooms_th1, filepath=filepath)
+            segmentation_map_path_post, colors = final_routine( img_ini, self.param_obj, self.size, draw,
+                                                               self.extended_segments_th1_merged, ind, rooms_th1, filepath=self.filepath)
             old_colors = []
             voronoi_graph, coordinates = vr.compute_voronoi_graph(path_obj.metric_map_path, self.param_obj,
-                                                                  False, '', self.param_obj.bormann, filepath=filepath)
+                                                                  False, '', self.param_obj.bormann, filepath=self.filepath)
             while old_colors != colors and ind < self.param_obj.iterations:
                 ind += 1
                 old_colors = colors
-                vr.voronoi_segmentation(patches, colors_th1, size, voronoi_graph, coordinates, self.param_obj.comp, path_obj.metric_map_path, ind, filepath=filepath)
-                segmentation_map_path_post, colors = final_routine(img_ini, self.param_obj, size, draw,
-                                                                   self.extended_segments_th1_merged, ind, rooms_th1, filepath=filepath)
+                vr.voronoi_segmentation(patches, colors_th1, self.size, voronoi_graph, coordinates, self.param_obj.comp, path_obj.metric_map_path, ind, filepath=self.filepath)
+                segmentation_map_path_post, colors = final_routine(img_ini, self.param_obj, self.size, draw,
+                                                                   self.extended_segments_th1_merged, ind, rooms_th1, filepath=self.filepath)
             rooms_th1 = make_rooms(patches)
             colors_final = []
             print(len(rooms_th1))
             for r in rooms_th1:
                 colors_final.append(0)
-            dsg.draw_rooms(rooms_th1, colors_final, '8b_rooms_th1_final', size, filepath=filepath)
+            dsg.draw_rooms(rooms_th1, colors_final, '8b_rooms_th1_final', self.size, filepath=self.filepath)
             # -------------------------------------------------------------------------------------
 
             end_time_main = time.time()
 
             # write the times on file
-            time_file = filepath + '17_times.txt'
+            time_file = self.filepath + '17_times.txt'
 
             with open(time_file, 'w+') as TIMEFILE:
                 print("time for main is: ", end_time_main - start_time_main, file=TIMEFILE)

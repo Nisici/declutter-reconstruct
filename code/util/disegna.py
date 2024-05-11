@@ -429,7 +429,7 @@ def draw_rooms_on_map(image, name, size, format=default_format, filepath='.'):
 	im = image.copy()
 	image = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
 	th, image = cv2.threshold(image, 230, 255, cv2.THRESH_BINARY)
-	cv2.imwrite(filepath + '0_Map_tmp.png', image, [cv2.IMWRITE_PNG_COMPRESSION])
+	cv2.imwrite(filepath + '0_Map_tmp.png', image, [cv2.IMWRITE_PNG_COMPRESSION, 1])
 	final_image = Image.open(filepath + '0_Map_tmp.png').convert('RGBA')
 	room_image = Image.open(filepath + '8b_rooms_th1.png')
 	pix_data_final = final_image.load()
