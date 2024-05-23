@@ -56,7 +56,7 @@ class ParameterObj:
         self.minOffset = 0.00001
 
         # Spatial cluster parameters
-        self.sogliaLateraleClusterMura = 1
+        self.sogliaLateraleClusterMura = 5
 
         # Extended lines parameters
         self.th1 = 0.0
@@ -77,7 +77,7 @@ class ParameterObj:
         self.division_threshold = 5
 
         # Orebro parameters
-        self.filter_level = 0.2
+        self.filter_level = 0.18
 
         # post processing parameters
         self.th_post = 750

@@ -50,11 +50,12 @@ def sort_name(par):
     return par[0]
 
 
-def main():
+def main(filter_level=0.18, sogliaClust=5):
     # ----------------PARAMETERS OBJECTS------------------------
     # loading parameters from parameters.py
     parameters_object = par.ParameterObj()
-
+    parameters_object.filter_level = filter_level
+    parameters_object.sogliaLateraleClusterMura = sogliaClust
     # loading path object with all path and name interesting for code
     paths = par.PathObj()
 

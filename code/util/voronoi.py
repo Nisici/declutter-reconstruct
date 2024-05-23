@@ -10,7 +10,7 @@ import networkx as nx
 import skan
 import numpy as np
 from PIL import Image, ImageDraw
-from skan import skeleton_to_csgraph
+from skan.csr import skeleton_to_csgraph
 from skimage import io, img_as_bool, img_as_uint, segmentation, img_as_ubyte
 from skimage.morphology import skeletonize
 from skimage.util import invert

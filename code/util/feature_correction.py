@@ -14,11 +14,19 @@ Rotates the lines so that their inclination is equal to the closest direction in
 """
 def correct_lines(lines, directions):
     new_lines = []
+    norm_dirs = directions.copy()
+    for dir in norm_dirs:
+        if dir < 0:
+            np.append(norm_dirs, dir + np.pi)
+        else:
+            np.append(norm_dirs, dir - np.pi)
     for l in lines:
-        line_dir = abs(radiant_inclination(l.x1, l.y1, l.x2, l.y2))
-        #directions = [0, np.pi/2]
-        main_dir = min(directions, key=lambda x: abs(line_dir - x))
-        rot_angle = main_dir - line_dir
+        line_dir = radiant_inclination(l.x1, l.y1, l.x2, l.y2)
+        main_dir = min(norm_dirs, key=lambda x: abs(line_dir - x))
+        if main_dir > line_dir:
+            rot_angle = main_dir - line_dir
+        else:
+            rot_angle = line_dir - main_dir
         new_line = rotate_line(l, rot_angle)
         new_lines.append(new_line)
     return new_lines

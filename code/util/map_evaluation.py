@@ -19,8 +19,6 @@ def map_metric(rose, jaccard_idx=1):
 	angle = abs(dirs[0] - dirs[1])
 	alpha = abs(np.pi/2 - angle)*180/np.pi
 	avg_dist = avg_distance_walls_lines(rose.walls, rose.extended_segments, rose.original_binary_map, dirs)
-	print("Alpha: {}".format(alpha))
-	print("Avg dist: {}".format(avg_dist))
 	M = np.e**(alpha) * avg_dist / jaccard_idx
 	return M
 
@@ -48,10 +46,12 @@ def jaccard_idx(map_binary, decluttered_map):
 """
 walls: set of ExtendedSegment
 lines: set of ExtendedSegment
+dirs: main directions of lines
+corrected_lines: if True dirs are manhattan and lines have been corrected so as to be manhattan
 compute the average distance between the walls and the associated lines.
-sum(dist_pixel
+
 """
-def avg_distance_walls_lines(walls, lines, original_binary_map, dirs):
+def avg_distance_walls_lines(walls, lines, original_binary_map, dirs, corrected_lines=False):
 	def distance_point_line(line, point_x, point_y):
 		return np.abs(
 			(line.y1 - line.y2) * point_x - (line.x1 - line.x2) * point_y + line.x1 * line.y2 - line.y1 * line.x2) / np.sqrt(
@@ -70,33 +70,27 @@ def avg_distance_walls_lines(walls, lines, original_binary_map, dirs):
 
 	distances = []
 	tol = 0.1
-	filepath = "/Users/gabrielesomaschini/Documents/UNI/UNIMI/Tirocigno/ROSE2/declutter-reconstruct/code"
+	filepath = "/Users/gabrielesomaschini/Documents/ROSE2/ROSE2/declutter-reconstruct/code/"
 	walls_without_out = remove_walls_outliers(walls, dirs)
 	pixels_to_walls = pixel_to_wall(original_binary_map, walls_without_out)
-	""""
-	if dirs is not None:
+	if corrected_lines:
 		horiz_lines = lines_of_direction(lines, dirs[0])
 		dsg.draw_extended_lines(horiz_lines, walls, "horizontal_lines", original_binary_map.shape, filepath=filepath)
 		vert_lines = lines_of_direction(lines, dirs[1])
 		dsg.draw_extended_lines(vert_lines, walls, "vertical_lines", original_binary_map.shape, filepath=filepath)
-		print("Number of total lines: {}".format(len(lines)))
-		print("Number of horizontal lines: {}".format(len(horiz_lines)))
-		print("Number of vertical lines: {}".format(len(vert_lines)))
-	"""
 	for (x, y), wall in pixels_to_walls.items():
-		# evaluate using given directions from another map
-		"""
-		if dirs is not None:
-			wall_angle = abs(radiant_inclination(wall.x1, wall.y1, wall.x2, wall.y2))
+		# evaluate using manhattan directions and corrected lines
+		if corrected_lines:
+			wall_angle = radiant_inclination(wall.x1, wall.y1, wall.x2, wall.y2)
 			if abs(wall_angle - dirs[0]) < tol:
 				line, distance = closest_line_to_point(x, y, horiz_lines)
 			else:
 				line, distance = closest_line_to_point(x, y, vert_lines)
-		"""
-		#evaluate using the same map
-		lines_spatial_clust = [l for l in lines if l.spatial_cluster == wall.spatial_cluster]
-		line = lines_spatial_clust[0]
-		distance = distance_point_line(line, x, y)
+		else:
+			#evaluate using the same map
+			lines_spatial_clust = [l for l in lines if l.spatial_cluster == wall.spatial_cluster]
+			line = lines_spatial_clust[0]
+			distance = distance_point_line(line, x, y)
 		distances.append(distance)
 	return np.mean(distances)
 

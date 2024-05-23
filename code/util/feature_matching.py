@@ -22,9 +22,12 @@ from scipy.optimize import linear_sum_assignment
 def lines_of_direction(lines, dir):
     lines_of_dir = []
     tol = 0.1
-    print("DIR: {}".format(dir))
+    if dir < 0:
+        dir+=3.14
     for l1 in lines:
-        angle = abs(radiant_inclination(l1.x1, l1.y1, l1.x2, l1.y2))
+        angle = radiant_inclination(l1.x1, l1.y1, l1.x2, l1.y2)
+        if angle < 0:
+            angle += 3.14
         if abs(angle - dir) < tol:
             lines_of_dir.append(l1)
     return lines_of_dir
@@ -88,7 +91,6 @@ def average_distance_between_lines(matchings):
     for l1, l2 in matchings.items():
         distance = segments_distance(l1.x1, l1.y1, l1.x2, l1.y2, l2.x1, l2.y1, l2.x2, l2.y2)
         distances.append(distance)
-    print("Distances len: {}, distances: {}".format(len(distances), distances))
     return np.mean(distances)
 
 """

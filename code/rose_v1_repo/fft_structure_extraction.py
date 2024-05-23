@@ -525,7 +525,7 @@ class FFTStructureExtraction:
                     #############################################################
                     row = self.analysed_map[cc[flag], rr[flag]]
                     row.shape = (row.shape[0], 1)
-                    temp_row_full = binary_dilation(row, selem=np.ones((padding, padding)))
+                    temp_row_full = binary_dilation(row, footprint=np.ones((padding, padding)))
                     temp_row_full = temp_row_full * 1
                     temp_row_cut = temp_row_full.copy()
 
@@ -787,7 +787,7 @@ class FFTStructureExtraction:
             ax.axis("off")
             name = "Binary Map"
             ax.set_title(name)
-            fig.canvas.set_window_title(name)
+            fig.canvas.manager.set_window_title(name)
             title = os.path.join(path, name + format)
             plt.savefig(title)
 
@@ -797,7 +797,7 @@ class FFTStructureExtraction:
             ax.axis("off")
             name = "FFT Spectrum"
             ax.set_title(name)
-            fig.canvas.set_window_title(name)
+            fig.canvas.manager.set_window_title(name)
             title = os.path.join(path, name + format)
             plt.savefig(title)
 
@@ -809,7 +809,7 @@ class FFTStructureExtraction:
             ax.axis("off")
             name = "FFT Spectrum with directions"
             ax.set_title(name)
-            fig.canvas.set_window_title(name)
+            fig.canvas.manager.set_window_title(name)
             ax.set_xlim(0, self.ft_image.shape[1])
             ax.set_ylim(0, self.ft_image.shape[0])
             title = os.path.join(path, name + format)
@@ -829,7 +829,7 @@ class FFTStructureExtraction:
             ax.axis("off")
             name = "Map with walls"
             ax.set_title(name)
-            fig.canvas.set_window_title(name)
+            fig.canvas.manager.set_window_title(name)
             title = os.path.join(path, name + format)
             plt.savefig(title)
 
@@ -851,7 +851,7 @@ class FFTStructureExtraction:
             ax.axis("off")
             name = "Map with directions"
             ax.set_title(name)
-            fig.canvas.set_window_title(name)
+            fig.canvas.manager.set_window_title(name)
             ax.set_xlim(0, self.binary_map.shape[1])
             ax.set_ylim(self.binary_map.shape[0], 0)
             title = os.path.join(path, name + format)
@@ -872,7 +872,7 @@ class FFTStructureExtraction:
             ax2.set_ylabel("Orientation score")
             name = "Unfolded FFT Spectrum"
             ax.set_title(name)
-            fig.canvas.set_window_title(name)
+            fig.canvas.manager.set_window_title(name)
             title = os.path.join(path, name + format)
             plt.savefig(title)
 
@@ -881,7 +881,7 @@ class FFTStructureExtraction:
             ax.imshow((np.abs(self.mask_ft_image)), cmap="nipy_spectral")
             ax.axis("off")
             name = "FFT Spectrum Signal"
-            fig.canvas.set_window_title(name)
+            fig.canvas.manager.set_window_title(name)
             ax.set_title(name)
             title = os.path.join(path, name + format)
             plt.savefig(title)
@@ -891,7 +891,7 @@ class FFTStructureExtraction:
             ax.imshow((np.abs(self.mask_inv_ft_image)), cmap="nipy_spectral")
             ax.axis("off")
             name = "FFT Spectrum Noise"
-            fig.canvas.set_window_title(name)
+            fig.canvas.manager.set_window_title(name)
             ax.set_title(name)
             title = os.path.join(path, name + format)
             plt.savefig(title)
@@ -901,7 +901,7 @@ class FFTStructureExtraction:
             ax.imshow(np.abs(self.map_scored_good), cmap = "plasma")
             ax.axis("off")
             name = "Map Scored Good"
-            fig.canvas.set_window_title(name)
+            fig.canvas.manager.set_window_title(name)
             ax.set_title(name)
             title = os.path.join(path, name + format)
             plt.savefig(title)
@@ -911,7 +911,7 @@ class FFTStructureExtraction:
             ax.imshow(np.abs(self.map_scored_bad), cmap="plasma")
             ax.axis("off")
             name = "Map Scored Bad"
-            fig.canvas.set_window_title(name)
+            fig.canvas.manager.set_window_title(name)
             ax.set_title(name)
             title = os.path.join(path, name + format)
             plt.savefig(title)
@@ -921,7 +921,7 @@ class FFTStructureExtraction:
             ax.imshow(np.abs(self.map_scored_diff), cmap="plasma")
             ax.axis("off")
             name = "Map Scored Diff"
-            fig.canvas.set_window_title(name)
+            fig.canvas.manager.set_window_title(name)
             ax.set_title(name)
             title = os.path.join(path, name + format)
             plt.savefig(title)
@@ -931,7 +931,7 @@ class FFTStructureExtraction:
             ax.imshow(self.map_split_good, cmap="plasma")
             ax.axis("off")
             name = "Map Split Good"
-            fig.canvas.set_window_title(name)
+            fig.canvas.manager.set_window_title(name)
             ax.set_title(name)
             title = os.path.join(path, name + format)
             plt.savefig(title)
@@ -941,7 +941,7 @@ class FFTStructureExtraction:
             ax.imshow((np.abs(self.ft_image_split)), cmap="nipy_spectral")
             ax.axis("off")
             name = "FFT Map Split Good"
-            fig.canvas.set_window_title(name)
+            fig.canvas.manager.set_window_title(name)
             ax.set_title(name)
             title = os.path.join(path, name + format)
             plt.savefig(title)
@@ -954,7 +954,7 @@ class FFTStructureExtraction:
             ax[1].axis("off")
             name1 = "Map"
             name2 = "Score"
-            fig.canvas.set_window_title("Map Quality assessment")
+            fig.canvas.manager.set_window_title("Map Quality assessment")
             ax[0].set_title(name1)
             ax[1].set_title(name2)
             plt.tight_layout()
@@ -971,7 +971,7 @@ class FFTStructureExtraction:
                 ax.add_patch(square)
             name = "Simple Filtered Map (" + str(self.quality_threshold) + ")"
             ax.axis("off")
-            fig.canvas.set_window_title(name)
+            fig.canvas.manager.set_window_title(name)
             ax.set_title(name)
             title = os.path.join(path, name + format)
             plt.savefig(title)
@@ -1003,7 +1003,7 @@ class FFTStructureExtraction:
             ax.plot(x, y_g, 'g')
             ax.axvline(x=self.cluster_quality_threshold, color='y')
             name = "Treshold Setup with Clusters"
-            fig.canvas.set_window_title(name)
+            fig.canvas.manager.set_window_title(name)
             ax.set_title(name)
             title = os.path.join(path, name + format)
             plt.savefig(title)
@@ -1017,7 +1017,7 @@ class FFTStructureExtraction:
                 ax.add_patch(square)
             name = "Cluster Filtered Map (" + str(self.cluster_quality_threshold) + ")"
             ax.axis("off")
-            fig.canvas.set_window_title(name)
+            fig.canvas.manager.set_window_title(name)
             ax.set_title(name)
             title = os.path.join(path, name + format)
             plt.savefig(title)
@@ -1034,7 +1034,7 @@ class FFTStructureExtraction:
             ax.axis("off")
             name = "Map with slices"
             ax.set_title(name)
-            fig.canvas.set_window_title(name)
+            fig.canvas.manager.set_window_title(name)
             title = os.path.join(path, name + format)
             plt.savefig(title)
 
@@ -1065,7 +1065,7 @@ class FFTStructureExtraction:
                     ax[int(i / ncols)][int(i % ncols)].axis('off')
                     i = i + 1
                 name = "Partial Scores"
-                fig.canvas.set_window_title(name)
+                fig.canvas.manager.set_window_title(name)
                 title = os.path.join(path, name + format)
                 plt.savefig(title)
             elif co == 1:
@@ -1073,7 +1073,7 @@ class FFTStructureExtraction:
                 ax.imshow(self.part_score[0])
                 ax.axis('off')
                 name = "Partial Scores"
-                fig.canvas.set_window_title(name)
+                fig.canvas.manager.set_window_title(name)
                 title = os.path.join(path, name + format)
                 plt.savefig(title)
 
@@ -1104,7 +1104,7 @@ class FFTStructureExtraction:
                     ax[int(i / ncols)][int(i % ncols)].axis('off')
                     i = i + 1
                 name = "Partial Reconstruct"
-                fig.canvas.set_window_title(name)
+                fig.canvas.manager.set_window_title(name)
                 title = os.path.join(path, name + format)
                 plt.savefig(title)
             elif co == 1:
@@ -1112,7 +1112,7 @@ class FFTStructureExtraction:
                 ax.imshow(self.part_reconstruction[0])
                 ax.axis('off')
                 name = "Partial Reconstruct"
-                fig.canvas.set_window_title(name)
+                fig.canvas.manager.set_window_title(name)
                 title = os.path.join(path, name + format)
                 plt.savefig(title)
 
@@ -1136,7 +1136,7 @@ class FFTStructureExtraction:
             ax.set_ylim(self.binary_map.shape[0], 0)
             ax.axis("off")
             name = "Wall lines from mbb"
-            fig.canvas.set_window_title(name)
+            fig.canvas.manager.set_window_title(name)
             title = os.path.join(path, name + format)
             plt.savefig(title)
 
@@ -1165,7 +1165,7 @@ class FFTStructureExtraction:
             ax.set_ylim(self.binary_map.shape[0], 0)
             ax.axis("off")
             name = "Short wall lines from mbb"
-            fig.canvas.set_window_title(name)
+            fig.canvas.manager.set_window_title(name)
             title = os.path.join(path, name + format)
             plt.savefig(title)
 
@@ -1190,7 +1190,7 @@ class FFTStructureExtraction:
             ax.set_ylim(self.binary_map.shape[0], 0)
             ax.axis("off")
             name = "Short wall lines over original map"
-            fig.canvas.set_window_title(name)
+            fig.canvas.manager.set_window_title(name)
             title = os.path.join(path, name + format)
             plt.savefig(title)
 
@@ -1211,7 +1211,7 @@ class FFTStructureExtraction:
             ax.set_ylim(self.binary_map.shape[0], 0)
             ax.axis("off")
             name = "Labels and Raw map"
-            fig.canvas.set_window_title(name)
+            fig.canvas.manager.set_window_title(name)
             title = os.path.join(path, name + format)
             plt.savefig(title)
 
@@ -1225,7 +1225,7 @@ class FFTStructureExtraction:
                 ax.plot([segment[1], segment[3]], [segment[0], segment[2]])
 
             name = "Raw line segments"
-            fig.canvas.set_window_title(name)
+            fig.canvas.manager.set_window_title(name)
 
             title = os.path.join(path, name + format)
             plt.savefig(title)
