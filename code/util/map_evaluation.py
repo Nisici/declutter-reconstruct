@@ -70,14 +70,14 @@ def avg_distance_walls_lines(walls, lines, original_binary_map, dirs, corrected_
 
 	distances = []
 	tol = 0.1
-	filepath = "/Users/gabrielesomaschini/Documents/ROSE2/ROSE2/declutter-reconstruct/code/"
+	#filepath = "/Users/gabrielesomaschini/Documents/ROSE2/ROSE2/declutter-reconstruct/code/"
 	walls_without_out = remove_walls_outliers(walls, dirs)
 	pixels_to_walls = pixel_to_wall(original_binary_map, walls_without_out)
 	if corrected_lines:
 		horiz_lines = lines_of_direction(lines, dirs[0])
-		dsg.draw_extended_lines(horiz_lines, walls, "horizontal_lines", original_binary_map.shape, filepath=filepath)
+		#dsg.draw_extended_lines(horiz_lines, walls, "horizontal_lines", original_binary_map.shape, filepath=filepath)
 		vert_lines = lines_of_direction(lines, dirs[1])
-		dsg.draw_extended_lines(vert_lines, walls, "vertical_lines", original_binary_map.shape, filepath=filepath)
+		#dsg.draw_extended_lines(vert_lines, walls, "vertical_lines", original_binary_map.shape, filepath=filepath)
 	for (x, y), wall in pixels_to_walls.items():
 		# evaluate using manhattan directions and corrected lines
 		if corrected_lines:

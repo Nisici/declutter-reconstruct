@@ -16,6 +16,18 @@ import shutil
 import FFT_MQ as fft
 import minibatch
 from matplotlib.ticker import MaxNLocator
+import re
+""""
+Evaluate maps using rose, calculate: main directions, avg distance between walls and the extended lines, 
+avg distance between walls and manhattan extended lines (90°), metric (not yet finished).
+You can evaluate a single map passing the command line argument --single True. This will make a file evaluate.txt
+with the stats, heatmap_on_original.png to see the distance between walls and lines colored on the map (blue = max dist,
+red = min dist), corrected_lines.png shows how the extended lines have been corrected to be manhattan.
+You can also evaluate a batch of maps from a folder with --single False (default). 
+If you evaluate a batch of map for each of them you will produce the same result as for the single map case and a new folder
+plot-stats which contains plots showing the values for each map, following alphabetical order, and mean and std for each val.
+
+"""
 
 def get_params():
     parser = argparse.ArgumentParser()
@@ -31,6 +43,12 @@ def get_params():
         default=5,
         help="sogliaLateraleClusterMura, più è alto meno cluster ci sono",
     )
+    parser.add_argument(
+        "--single",
+        type=bool,
+        default=False,
+        help="Run eval only on one image",
+    )
     return parser.parse_args()
 
 """
@@ -42,7 +60,7 @@ def plot_incremental_dirs_manhattan(dirs, filepath):
     manhattan = np.pi/2
     y = []
     for dir in dirs:
-        angle = abs(dir[0] - dir[2])
+        angle = abs(dir[0] - dir[1])
         manhat_diff = abs(manhattan - angle) * 180 / np.pi
         y.append(manhat_diff)
     plt.figure(figsize=(8,6))
@@ -50,20 +68,43 @@ def plot_incremental_dirs_manhattan(dirs, filepath):
     plt.xticks(range(min(x), max(x) + 1))
     plt.savefig(os.path.join(filepath, "directions.png"))
 
-def plot_incremental_walls_distances(distances, filepath, name="wall_distances"):
-    x = np.arange(0, len(distances))
+def plot_incremental_vals(distances, filepath, name="plot", labels=None):
+    x = labels
+    if not labels:
+        x = np.arange(0, len(distances))
+        plt.xticks(range(min(x), max(x) + 1))
     plt.figure(figsize=(8,6))
     plt.plot(x, distances)
-    plt.xticks(range(min(x), max(x) + 1))
     plt.savefig(os.path.join(filepath, name))
 
-def plot_incremental_metric(metrics, filepath):
-    x = np.arange(0, len(metrics))
-    plt.figure(figsize=(8,6))
-    plt.plot(x, metrics)
-    plt.xticks(range(min(x), max(x) + 1))
-    plt.savefig(os.path.join(filepath, "metrics.png"))
 
+def natural_sort_key(s):
+    return [int(text) if text.isdigit() else text.lower() for text in re.split('([0-9]+)', s)]
+
+
+def evaluate_single_map(paths, parameters_object):
+    try:
+        rose = start_main(parameters_object, paths)
+    except Exception:
+        raise Exception
+    dirs = [rose.param_obj.comp[0], rose.param_obj.comp[2]]
+    manhattan_dirs = manhattan_directions(dirs)
+    manhattan_lines = correct_lines(rose.extended_segments, manhattan_dirs)[:-4]
+    draw_extended_lines(manhattan_lines, rose.walls, "corrected_lines", rose.size, filepath=rose.filepath)
+    avg_dist_walls_lines = avg_distance_walls_lines(rose.walls, rose.extended_segments, rose.original_binary_map, dirs)
+    avg_dist_walls_manhattan_lines = avg_distance_walls_lines(rose.walls, manhattan_lines,
+                                                              rose.original_binary_map, dirs,
+                                                              corrected_lines=True)
+    metric = map_metric(rose)
+    distance_heat_map(rose.extended_segments, rose.walls, rose.filepath, rose.original_map, rose.original_binary_map,
+                      dirs)
+    degrees = abs(dirs[0] - dirs[1]) * 180 / np.pi
+    with open(os.path.join(rose.filepath, "evaluation.txt"), 'w') as file:
+        file.write("Degrees: {}\n".format(degrees))
+        file.write("Avg dist wall lines: {}\n".format(avg_dist_walls_lines))
+        file.write("Avg dist wall manhattan lines: {}\n".format(avg_dist_walls_manhattan_lines))
+        file.write("Metric val: {}".format(metric))
+    return dirs, avg_dist_walls_lines, avg_dist_walls_manhattan_lines, metric
 
 def main():
     # ----------------PARAMETERS OBJECTS------------------------
@@ -92,87 +133,75 @@ def main():
     make_folder('data/OUTPUT', map_folder)
     make_folder(os.path.join('data/OUTPUT/', map_folder), map_name)
     paths.path_folder_output = os.path.join('./data/OUTPUT/', map_folder, map_name)
-    make_folder(paths.path_folder_output, "plots-stats")
 
-    # apply rose to every map in directory
-    directions = []
-    distances = []
-    distances_manhattan = []
-    metrics = []
+    params = get_params()
+    parameters_object.filter_level, parameters_object.sogliaLateraleClusterMura = params.filter, params.cluster
 
-    import re
-    def natural_sort_key(s):
-        return [int(text) if text.isdigit() else text.lower() for text in re.split('([0-9]+)', s)]
+    if params.single:
+        make_folder('data/OUTPUT', 'SINGLEMAP')
+        paths.path_folder_output = './data/OUTPUT/SINGLEMAP'
+        # asking what map to use
+        paths.metric_map_name = check_int(paths.path_folder_input)
+        paths.metric_map_path = os.path.join(paths.path_folder_input + '/' + paths.metric_map_name)
+        evaluate_single_map(paths, parameters_object)
 
-    for root, dirs, files in os.walk(paths.path_folder_input):
-        for file in sorted(files, key=natural_sort_key):
-            paths.metric_map_name = file
-            paths.metric_map_path = os.path.join(paths.path_folder_input + '/' + paths.metric_map_name)
-            if not paths.metric_map_name.endswith('.png') and not paths.metric_map_name.endswith('.jpg') and not paths.metric_map_name.endswith(
-                    '.jpeg'):
-                print('NOT AN IMAGE')
-            else:
-                params = get_params()
-                parameters_object.filter_level, parameters_object.sogliaLateraleClusterMura = params.filter, params.cluster
-                try:
-                    rose = start_main(parameters_object, paths)
-                except Exception:
-                    print("cant find directions")
-                    continue
-                dirs = [rose.param_obj.comp[0], rose.param_obj.comp[2]]
-                manhattan_dirs = manhattan_directions(dirs)
-                manhattan_lines = correct_lines(rose.extended_segments, manhattan_dirs)[:-4]
-                draw_extended_lines(manhattan_lines, rose.walls, "corrected_lines", rose.size, filepath=rose.filepath)
-                directions.append(rose.param_obj.comp)
-                avg_dist_walls_lines = avg_distance_walls_lines(rose.walls, rose.extended_segments, rose.original_binary_map, dirs)
-                avg_dist_walls_manhattan_lines = avg_distance_walls_lines(rose.walls, manhattan_lines,
-                                                                          rose.original_binary_map, dirs,
-                                                                          corrected_lines=True)
-                metric = map_metric(rose)
-                distance_heat_map(rose.extended_segments, rose.walls,  rose.filepath , rose.original_map, rose.original_binary_map, dirs)
-                distances.append(avg_dist_walls_lines)
-                distances_manhattan.append(avg_dist_walls_manhattan_lines)
-                metrics.append(metric)
-                degrees = abs(dirs[0] - dirs[1]) * 180 / np.pi
-                with open(os.path.join(rose.filepath, "evaluation.txt"), 'w') as file:
-                    file.write("Degrees: {}\n".format(degrees))
-                    file.write("Avg dist wall lines: {}\n".format(avg_dist_walls_lines))
-                    file.write("Avg dist wall manhattan lines: {}\n".format(avg_dist_walls_manhattan_lines))
-                    file.write("Metric val: {}".format(metric))
+    #APPLY ROSE TO EVERY MAP IN DIRECTORY
+    else:
+        directions = []
+        distances = []
+        distances_manhattan = []
+        metrics = []
+        labels = [] # for plotting
+        make_folder(paths.path_folder_output, "plots-stats")
+        for root, dirs, files in os.walk(paths.path_folder_input):
+            for file in sorted(files, key=natural_sort_key):
+                paths.metric_map_name = file
+                paths.metric_map_path = os.path.join(paths.path_folder_input + '/' + paths.metric_map_name)
+                if not paths.metric_map_name.endswith('.png') and not paths.metric_map_name.endswith('.jpg') and not paths.metric_map_name.endswith(
+                        '.jpeg'):
+                    print('NOT AN IMAGE')
+                else:
+                    try:
+                        direction, avg_dist_walls_lines, avg_dist_walls_manhattan_lines, metric = evaluate_single_map(paths, parameters_object)
+                    except Exception:
+                        print("Can't find directions")
+                        continue
+                    directions.append(direction)
+                    distances.append(avg_dist_walls_lines)
+                    distances_manhattan.append(avg_dist_walls_manhattan_lines)
+                    metrics.append(metric)
+                    label = re.findall(r'\d+', file)[-1]
+                    print(label)
+                    labels.append(label)
+        time = str(datetime.datetime.now())
+        plots_path = os.path.join(paths.path_folder_output, "plots-stats")
+        make_folder(plots_path, time)
+        plots_path = os.path.join(plots_path, time)
+        with open(os.path.join(plots_path, "params.txt"), 'w') as file:
+            file.write("filter_level: {}\n".format(parameters_object.filter_level))
+            file.write("sogliaLateraleClusterMura: {}\n".format(parameters_object.sogliaLateraleClusterMura))
+        with open(os.path.join(plots_path, "stats.txt"), 'w') as file:
+            meanD = np.mean(directions)
+            varianceD = np.std(directions)
+            meanWL = np.mean(distances)
+            varianceWL = np.std(distances)
+            meanWM = np.mean(distances_manhattan)
+            varianceWM = np.std(distances_manhattan)
+            meanM = np.mean(metrics)
+            varianceM = np.std(metrics)
+            file.write("Degree diff manhattan mean: {}\n".format(meanD))
+            file.write("Degrees diff manhattan variance: {}\n".format(varianceD))
+            file.write("Avg dist wall lines mean: {}\n".format(meanWL))
+            file.write("Avg dist wall lines variance: {}\n".format(varianceWL))
+            file.write("Avg dist wall manhattan lines mean: {}\n".format(meanWM))
+            file.write("Avg dist wall manhattan lines variance: {}\n".format(varianceWM))
+            file.write("Metric mean: {}\n".format(meanM))
+            file.write("Metric variance: {}\n".format(varianceM))
 
-                print("Degrees: {}".format(degrees))
-                print("Avg dist wall lines: {}".format(avg_dist_walls_lines))
-                print("Avg dist wall manhattan lines: {}".format(avg_dist_walls_manhattan_lines))
-                print("Metric val: {}".format(metric))
-    time = str(datetime.datetime.now())
-    plots_path = os.path.join(paths.path_folder_output, "plots-stats")
-    make_folder(plots_path, time)
-    plots_path = os.path.join(plots_path, time)
-    with open(os.path.join(plots_path, "params.txt"), 'w') as file:
-        file.write("filter_level: {}\n".format(parameters_object.filter_level))
-        file.write("sogliaLateraleClusterMura: {}\n".format(parameters_object.sogliaLateraleClusterMura))
-    with open(os.path.join(plots_path, "stats.txt"), 'w') as file:
-        meanD = np.mean(directions)
-        varianceD = np.std(directions)
-        meanWL = np.mean(distances)
-        varianceWL = np.std(distances)
-        meanWM = np.mean(distances_manhattan)
-        varianceWM = np.std(distances_manhattan)
-        meanM = np.mean(metrics)
-        varianceM = np.std(metrics)
-        file.write("Degree diff manhattan mean: {}\n".format(meanD))
-        file.write("Degrees diff manhattan variance: {}\n".format(varianceD))
-        file.write("Avg dist wall lines mean: {}\n".format(meanWL))
-        file.write("Avg dist wall lines variance: {}\n".format(varianceWL))
-        file.write("Avg dist wall manhattan lines mean: {}\n".format(meanWM))
-        file.write("Avg dist wall manhattan lines variance: {}\n".format(varianceWM))
-        file.write("Metric mean: {}\n".format(meanM))
-        file.write("Metric variance: {}\n".format(varianceM))
-
-    plot_incremental_dirs_manhattan(directions, plots_path)
-    plot_incremental_walls_distances(distances, plots_path)
-    plot_incremental_walls_distances(distances_manhattan, plots_path, "wall_distances_manhattan")
-    plot_incremental_metric(metrics, plots_path)
+        plot_incremental_dirs_manhattan(directions, plots_path)
+        plot_incremental_vals(distances, plots_path, "wall_distances", labels)
+        plot_incremental_vals(distances_manhattan, plots_path, "wall_distances_manhattan", labels)
+        plot_incremental_vals(metrics, plots_path, "metrics", labels)
 
 def start_main(parameters_object, paths):
 
