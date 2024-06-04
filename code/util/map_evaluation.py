@@ -5,7 +5,7 @@ import math
 import object.Segment as Segment
 import util.disegna as dsg
 from random import randint
-from object.Segment import radiant_inclination
+from object.Segment import radiant_inclination, segments_distance
 from util.feature_matching import lines_of_direction
 from skimage.metrics import structural_similarity
 from sklearn.metrics import jaccard_score
@@ -19,9 +19,16 @@ def map_metric(rose, jaccard_idx=1):
 	angle = abs(dirs[0] - dirs[1])
 	alpha = abs(np.pi/2 - angle)*180/np.pi
 	avg_dist = avg_distance_walls_lines(rose.walls, rose.extended_segments, rose.original_binary_map, dirs)
-	M = np.e**(alpha) * avg_dist / jaccard_idx
+	M = (np.e**(alpha) - 1) * avg_dist / jaccard_idx
 	return M
 
+def map_metric_manhattan(rose, manhattan_lines, dirs_manhattan):
+	dirs = [rose.param_obj.comp[0], rose.param_obj.comp[2]]
+	angle = abs(dirs[0] - dirs[1])
+	alpha = abs(np.pi / 2 - angle) * 180 / np.pi
+	avg_dist = avg_distance_walls_lines(rose.walls, manhattan_lines, rose.original_binary_map, dirs_manhattan)
+	M = (np.e ** (alpha) - 1) * avg_dist
+	return M
 # vertices is the output of layout.external_contour
 def area_of_vertices(vertices):
 	x = [v[0] for v in vertices]
@@ -47,52 +54,39 @@ def jaccard_idx(map_binary, decluttered_map):
 walls: set of ExtendedSegment
 lines: set of ExtendedSegment
 dirs: main directions of lines
-corrected_lines: if True dirs are manhattan and lines have been corrected so as to be manhattan
 compute the average distance between the walls and the associated lines.
-
 """
-def avg_distance_walls_lines(walls, lines, original_binary_map, dirs, corrected_lines=False):
+def avg_distance_walls_lines(walls, lines, original_binary_map, dirs):
 	def distance_point_line(line, point_x, point_y):
 		return np.abs(
 			(line.y1 - line.y2) * point_x - (line.x1 - line.x2) * point_y + line.x1 * line.y2 - line.y1 * line.x2) / np.sqrt(
 			(line.y1 - line.y2) ** 2 + (line.x1 - line.x2) ** 2
 		)
-
-	def closest_line_to_point(x, y, lines):
-		cl_line = lines[0]
-		cl_line_dist = distance_point_line(cl_line, x, y)
-		for l in lines:
-			dist = distance_point_line(l, x, y)
-			if dist < cl_line_dist:
-				cl_line_dist = dist
-				cl_line = l
-		return cl_line, cl_line_dist
-
-	distances = []
-	tol = 0.1
-	#filepath = "/Users/gabrielesomaschini/Documents/ROSE2/ROSE2/declutter-reconstruct/code/"
+	distances = {}
 	walls_without_out = remove_walls_outliers(walls, dirs)
 	pixels_to_walls = pixel_to_wall(original_binary_map, walls_without_out)
-	if corrected_lines:
-		horiz_lines = lines_of_direction(lines, dirs[0])
-		#dsg.draw_extended_lines(horiz_lines, walls, "horizontal_lines", original_binary_map.shape, filepath=filepath)
-		vert_lines = lines_of_direction(lines, dirs[1])
-		#dsg.draw_extended_lines(vert_lines, walls, "vertical_lines", original_binary_map.shape, filepath=filepath)
 	for (x, y), wall in pixels_to_walls.items():
-		# evaluate using manhattan directions and corrected lines
-		if corrected_lines:
-			wall_angle = radiant_inclination(wall.x1, wall.y1, wall.x2, wall.y2)
-			if abs(wall_angle - dirs[0]) < tol:
-				line, distance = closest_line_to_point(x, y, horiz_lines)
-			else:
-				line, distance = closest_line_to_point(x, y, vert_lines)
-		else:
-			#evaluate using the same map
-			lines_spatial_clust = [l for l in lines if l.spatial_cluster == wall.spatial_cluster]
-			line = lines_spatial_clust[0]
-			distance = distance_point_line(line, x, y)
-		distances.append(distance)
-	return np.mean(distances)
+		lines_spatial_clust = [l for l in lines if l.spatial_cluster == wall.spatial_cluster]
+		line = lines_spatial_clust[0]
+		distance = distance_point_line(line, x, y)
+		distances[wall] = distance
+	#if a wall w1 is connected to a wall w2 which has zero distance to its extended line, then also w1 has zero distance,
+	# if it is part of the same cluster. it doesn't work, everything becomes zero.
+	"""
+	change = True
+	while change:
+		change = False
+		for w1 in distances.keys():
+			for w2 in distances.keys():
+				if w1.spatial_cluster == w2.spatial_cluster and \
+						segments_distance(w1.x1, w1.y1, w1.x2, w1.y2, w2.x1, w2.y1, w2.x2, w2.y2) == 0 and \
+						(radiant_inclination(w1.x1, w1.y1, w1.x2, w1.y2) == radiant_inclination(w2.x1, w2.y1, w2.x2, w2.y2)) \
+						and	(distances[w1] > 0 or distances[w2] > 0):
+					distances[w1] = 0
+					distances[w2] = 0
+					change = True
+	"""
+	return np.mean(list(distances.values()))
 
 def pixel_to_wall(original_binary_map, walls):
 	mask = np.zeros_like(original_binary_map)
@@ -107,7 +101,7 @@ def pixel_to_wall(original_binary_map, walls):
 		# Iterate through the pixels covered by this line segment
 		for y in range(min(int(wall.y1), int(wall.y2)), max(int(wall.y1), int(wall.y2)) + 1):
 			for x in range(min(int(wall.x1), int(wall.x2)), max(int(wall.x1), int(wall.x2)) + 1):
-				# white perchè nelle mappe create automaticamente quello è il valore che corrisponde al bianco.
+				# white perchè nelle mappe create automaticamente quello è il valore che corrisponde al bianco nelle mappe binary.
 				if (mask[y, x] == 255) and (original_binary_map[y, x] >= wall_white):
 					pixel_to_wall[(x, y)] = wall
 	return pixel_to_wall
@@ -115,11 +109,18 @@ def pixel_to_wall(original_binary_map, walls):
 #remove walls that have an inclination that is too much different from the main directions,
 #this is decided by a threshold
 def remove_walls_outliers(walls, dirs):
-	tol = 0.2
+	tol = 0.1
 	walls_without_outl = []
+	p0 = dirs[0] + np.pi / 2
+	p1 = dirs[1] + np.pi / 2
+	p0 = p0 % (2 * np.pi)
+	p1 = p1 % (2 * np.pi)
+	p0 = np.pi - p0
+	p1 = np.pi - p1
 	for w in walls:
-		angle = abs(radiant_inclination(w.x1, w.y1, w.x2, w.y2))
-		if abs(angle - abs(dirs[0])) <= tol or abs(angle - abs(dirs[1])) <= tol:
+		angle = radiant_inclination(w.x1, w.y1, w.x2, w.y2)
+		if abs(angle - dirs[0]) <= tol or abs(angle - dirs[1]) <= tol\
+				or abs(angle - p0) <= tol or abs(angle - p1) <= tol:
 			walls_without_outl.append(w)
 	return walls_without_outl
 

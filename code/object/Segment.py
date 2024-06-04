@@ -357,17 +357,17 @@ def set_weights(edges, wall_list):
 				tmp2 = [tmp[0][0], tmp[0][1], tmp[1][0], tmp[1][1]]
 				# add projection x1,y1,x2,y2 only if is not already inside (avoid copy that cause trouble when deleting
 				# projections included in others)
-				if not already_inside_segment(tmp2, projections):
+				#if not already_inside_segment(tmp2, projections):
 					#projections also need the spatial cluster
-					projections.append((tmp2, spatial_cluster))
+				projections.append((tmp2, spatial_cluster))
 				del tmp[:]
 		# remove projections included in others
 		#BISOGNA TOGLIERE ANCHE SPATIAL CLUSTER
-		projections[:] = [tup for tup in projections if not included(tup, projections)]
+		#projections[:] = [tup for tup in projections if not included(tup, projections)]
 		# merge of projections that intersect each other
-		merged = merge_overlapped(projections)
-		while merged == 1:
-			merged = merge_overlapped(projections)
+		#merged = merge_overlapped(projections)
+		#while merged == 1:
+			#merged = merge_overlapped(projections)
 		# compute coverage of the edge
 		coverage = compute_coverage(edge, projections)
 		if length(edge.x1, edge.y1, edge.x2, edge.y2) >= 20:

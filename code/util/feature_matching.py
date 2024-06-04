@@ -69,7 +69,7 @@ def lines_matching(lines1, lines2, dirs1, dirs2):
 # dirs2: (n1, n2)
 # dist = (|m1 - n1|, |m2 - n2|)
 def distance_between_directions(dirs1, dirs2):
-    return 0
+    pass
 def average_distance_between_points(matchings):
     distances = []
     for match in matchings:

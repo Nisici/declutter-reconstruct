@@ -4,7 +4,6 @@ from object.ExtendedSegment import ExtendedSegment
 from scipy.optimize import LinearConstraint
 from scipy.optimize import minimize
 
-
 """
 lines: list of ExtendedSegment
 directions: list of directions (floats)
@@ -14,19 +13,19 @@ Rotates the lines so that their inclination is equal to the closest direction in
 """
 def correct_lines(lines, directions):
     new_lines = []
-    norm_dirs = directions.copy()
-    p0 = directions[0] + np.pi / 2
-    p1 = directions[1] + np.pi / 2
-    p0 = p0 % (2 * np.pi)
-    p1 = p1 % (2 * np.pi)
-    p0 = np.pi - p0
-    p1 = np.pi - p1
-    np.append(norm_dirs, [p0, p1])
+    norm_dirs = list(directions.copy())
+    p0 = directions[0] + np.pi
+    p1 = directions[1] + np.pi
+    norm_dirs.extend([p0, p1])
     for l in lines:
         line_dir = radiant_inclination(l.x1, l.y1, l.x2, l.y2)
+        if line_dir < 0:
+            line_dir += np.pi
         main_dir = min(norm_dirs, key=lambda x: abs(line_dir - x))
         if main_dir > line_dir:
             rot_angle = main_dir - line_dir
+        elif main_dir == line_dir:
+            rot_angle = 0
         else:
             rot_angle = 2*np.pi - (line_dir - main_dir)
         new_line = rotate_line(l, rot_angle)
@@ -47,9 +46,8 @@ def rotate_line(line, angle):
     y1 = (line.x1 - cx) * np.sin(angle) + (line.y1 - cy) * np.cos(angle) + cy
     x2 = (line.x2 - cx) * np.cos(angle) - (line.y2 - cy) * np.sin(angle) + cx
     y2 = (line.x2 - cx) * np.sin(angle) + (line.y2 - cy) * np.cos(angle) + cy
-    new_line = ExtendedSegment((x1, y1), (x2, y2), None, None)
+    new_line = ExtendedSegment((x1, y1), (x2, y2), line.angular_cluster, line.spatial_cluster)
     return new_line
-
 
 """
 precondition: len(directions) = 2

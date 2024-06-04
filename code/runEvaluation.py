@@ -6,8 +6,8 @@ from matplotlib import pyplot as plt
 from PIL import Image
 import numpy as np
 from util.feature_correction import manhattan_directions, correct_lines
-from util.disegna import draw_extended_lines
-from util.map_evaluation import jaccard_idx, map_metric, distance_heat_map
+from util.disegna import draw_extended_lines, draw_walls
+from util.map_evaluation import jaccard_idx, map_metric, distance_heat_map, map_metric_manhattan
 import os
 import argparse
 import parameters as par
@@ -51,22 +51,6 @@ def get_params():
     )
     return parser.parse_args()
 
-"""
-x axis: time-step
-y axis: difference between 90° (being manhattan) and angle between two directions |d1-d2| in degrees
-"""
-def plot_incremental_dirs_manhattan(dirs, filepath):
-    x = np.arange(0, len(dirs))
-    manhattan = np.pi/2
-    y = []
-    for dir in dirs:
-        angle = abs(dir[0] - dir[1])
-        manhat_diff = abs(manhattan - angle) * 180 / np.pi
-        y.append(manhat_diff)
-    plt.figure(figsize=(8,6))
-    plt.plot(x, y)
-    plt.xticks(range(min(x), max(x) + 1))
-    plt.savefig(os.path.join(filepath, "directions.png"))
 
 def plot_incremental_vals(distances, filepath, name="plot", labels=None):
     x = labels
@@ -77,6 +61,16 @@ def plot_incremental_vals(distances, filepath, name="plot", labels=None):
     plt.plot(x, distances)
     plt.savefig(os.path.join(filepath, name))
 
+#directions: list of angles
+#returns: list of difference between angles and 90° in degrees
+def dirs_diff_manhattan(dirs):
+    manhattan = np.pi / 2
+    y = []
+    for dir in dirs:
+        angle = abs(dir[0] - dir[1])
+        manhat_diff = abs(manhattan - angle) * 180 / np.pi
+        y.append(manhat_diff)
+    return y
 
 def natural_sort_key(s):
     return [int(text) if text.isdigit() else text.lower() for text in re.split('([0-9]+)', s)]
@@ -89,22 +83,27 @@ def evaluate_single_map(paths, parameters_object):
         raise Exception
     dirs = [rose.param_obj.comp[0], rose.param_obj.comp[2]]
     manhattan_dirs = manhattan_directions(dirs)
-    manhattan_lines = correct_lines(rose.extended_segments, manhattan_dirs)[:-4]
+    manhattan_lines = correct_lines(rose.extended_segments, manhattan_dirs)
+    corrected_walls = correct_lines(rose.walls, manhattan_dirs)
     draw_extended_lines(manhattan_lines, rose.walls, "corrected_lines", rose.size, filepath=rose.filepath)
+    draw_walls(corrected_walls, "corrected_walls", rose.size, filepath=rose.filepath)
     avg_dist_walls_lines = avg_distance_walls_lines(rose.walls, rose.extended_segments, rose.original_binary_map, dirs)
     avg_dist_walls_manhattan_lines = avg_distance_walls_lines(rose.walls, manhattan_lines,
-                                                              rose.original_binary_map, dirs,
-                                                              corrected_lines=True)
+                                                              rose.original_binary_map, manhattan_dirs,)
+    avg_corrected_walls_distance = avg_distance_walls_lines(corrected_walls, manhattan_lines, rose.original_binary_map, manhattan_dirs)
     metric = map_metric(rose)
     distance_heat_map(rose.extended_segments, rose.walls, rose.filepath, rose.original_map, rose.original_binary_map,
                       dirs)
     degrees = abs(dirs[0] - dirs[1]) * 180 / np.pi
+    metric_manhattan = map_metric_manhattan(rose, manhattan_lines, manhattan_dirs)
     with open(os.path.join(rose.filepath, "evaluation.txt"), 'w') as file:
         file.write("Degrees: {}\n".format(degrees))
         file.write("Avg dist wall lines: {}\n".format(avg_dist_walls_lines))
         file.write("Avg dist wall manhattan lines: {}\n".format(avg_dist_walls_manhattan_lines))
-        file.write("Metric val: {}".format(metric))
-    return dirs, avg_dist_walls_lines, avg_dist_walls_manhattan_lines, metric
+        file.write("Metric val: {}\n".format(metric))
+        file.write("Metric manhattan val: {}\n".format(metric_manhattan))
+        file.write("Corrected walls distance: {}".format(avg_corrected_walls_distance))
+    return dirs, avg_dist_walls_lines, avg_dist_walls_manhattan_lines, metric, metric_manhattan, avg_corrected_walls_distance
 
 def main():
     # ----------------PARAMETERS OBJECTS------------------------
@@ -151,6 +150,8 @@ def main():
         distances = []
         distances_manhattan = []
         metrics = []
+        metrics_manhattan = []
+        corrected_walls_distances = []
         labels = [] # for plotting
         make_folder(paths.path_folder_output, "plots-stats")
         for root, dirs, files in os.walk(paths.path_folder_input):
@@ -162,7 +163,8 @@ def main():
                     print('NOT AN IMAGE')
                 else:
                     try:
-                        direction, avg_dist_walls_lines, avg_dist_walls_manhattan_lines, metric = evaluate_single_map(paths, parameters_object)
+                        direction, avg_dist_walls_lines, avg_dist_walls_manhattan_lines, metric, metric_manhattan, avg_corrected_walls_distance\
+                            = evaluate_single_map(paths, parameters_object)
                     except Exception:
                         print("Can't find directions")
                         continue
@@ -170,8 +172,9 @@ def main():
                     distances.append(avg_dist_walls_lines)
                     distances_manhattan.append(avg_dist_walls_manhattan_lines)
                     metrics.append(metric)
+                    metrics_manhattan.append(metric_manhattan)
+                    corrected_walls_distances.append(avg_corrected_walls_distance)
                     label = re.findall(r'\d+', file)[-1]
-                    print(label)
                     labels.append(label)
         time = str(datetime.datetime.now())
         plots_path = os.path.join(paths.path_folder_output, "plots-stats")
@@ -197,11 +200,13 @@ def main():
             file.write("Avg dist wall manhattan lines variance: {}\n".format(varianceWM))
             file.write("Metric mean: {}\n".format(meanM))
             file.write("Metric variance: {}\n".format(varianceM))
-
-        plot_incremental_dirs_manhattan(directions, plots_path)
+        dirs_diff_manh = dirs_diff_manhattan(directions)
+        plot_incremental_vals(dirs_diff_manh, plots_path, "directions", labels)
         plot_incremental_vals(distances, plots_path, "wall_distances", labels)
         plot_incremental_vals(distances_manhattan, plots_path, "wall_distances_manhattan", labels)
-        plot_incremental_vals(metrics, plots_path, "metrics", labels)
+        plot_incremental_vals(corrected_walls_distances, plots_path, "corrected_walls_distances", labels)
+        #plot_incremental_vals(metrics, plots_path, "metrics", labels)
+        #plot_incremental_vals(metrics_manhattan, plots_path, "metrics_awd_manhattan", labels)
 
 def start_main(parameters_object, paths):
 

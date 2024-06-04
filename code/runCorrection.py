@@ -2,9 +2,11 @@ import runMe
 from util.feature_correction import manhattan_directions
 from util.feature_correction import correct_lines
 from util.feature_correction import lines_directions
-from util.disegna import draw_extended_lines
+from util.disegna import draw_extended_lines, draw_walls
 from util.feature_matching import lines_matching, average_distance_between_lines, distance_between_directions
+from util.map_evaluation import avg_distance_walls_lines
 import numpy as np
+import argparse
 
 def type_of_correction():
     print("0: Map exploration correction")
@@ -13,6 +15,27 @@ def type_of_correction():
     inp = int(input("Insert type of correction: "))
     return inp
 
+def get_params():
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--filter",
+        type=float,
+        default=0.18,
+        help="Amount of clutter to remove",
+    )
+    parser.add_argument(
+        "--cluster",
+        type=float,
+        default=5,
+        help="sogliaLateraleClusterMura, più è alto meno cluster ci sono",
+    )
+    parser.add_argument(
+        "--single",
+        type=bool,
+        default=False,
+        help="Run eval only on one image",
+    )
+    return parser.parse_args()
 if __name__ == '__main__':
     corr = type_of_correction()
     # Map exploration correction
@@ -55,11 +78,23 @@ if __name__ == '__main__':
 
     # Manhattan correction
     else:
-        rose = runMe.main()
+        params = get_params()
+        rose = runMe.main(filter_level=params.filter, sogliaClust=params.cluster)
         #take the main directions
         main_dirs = rose.param_obj.comp[0], rose.param_obj.comp[2]
         #correcte the main directions
         manhattan_dirs = manhattan_directions(main_dirs)
         #correct the lines
         corrected_lines = correct_lines(rose.extended_segments[:-4], manhattan_dirs)
+        awd = avg_distance_walls_lines(rose.walls, corrected_lines, rose.original_binary_map, manhattan_dirs)
+        #correct the walls
+        corrected_walls = correct_lines(rose.walls, manhattan_dirs)
         draw_extended_lines(corrected_lines, rose.walls, "corrected_lines", rose.size, filepath=rose.filepath)
+        draw_walls(rose.walls, "corrected_walls", rose.size, filepath=rose.filepath)
+        draw_walls(rose.walls_projections, "walls_projections", rose.size, filepath=rose.filepath)
+        acwd = avg_distance_walls_lines(corrected_walls, corrected_lines, rose.original_binary_map, manhattan_dirs)
+        apwd = avg_distance_walls_lines(rose.walls_projections, corrected_lines, rose.original_binary_map, manhattan_dirs)
+        print("Avg walls distance: {}".format(awd))
+        print("Avg corrected walls_ang distance: {}".format(acwd))
+
+
