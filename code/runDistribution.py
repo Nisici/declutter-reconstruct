@@ -9,7 +9,7 @@ import parameters as par
 import minibatch
 import re
 import FFT_MQ as fft
-from util.map_evaluation import walls_distance_distribution, walls_directions_distribution, pixels_walls_distance_distribution
+from util.map_evaluation import walls_distance_distribution, walls_directions_distribution, pixels_walls_distance_distribution, EMD
 from util.feature_correction import correct_lines, manhattan_directions
 from object.Segment import radiant_inclination
 from util.disegna import draw_extended_lines
@@ -177,55 +177,7 @@ def save_distribution_plot(union_distrib, filepath, name=""):
     plt.savefig(os.path.join(filepath, name + "histogram.png"))
     plt.close()
 
-def make_distance_matrix(dict1, dict2, metric='euclidean'):
-    dist_matrix = np.zeros((len(dict1), len(dict1)), dtype='float64')
-    i = 0
-    j = 0
-    # give weights based on |k1 - k2|
-    for k1, v1 in dict1.items():
-        for k2, v2 in dict2.items():
-            if metric == 'angular':
-                # L1 because small values shouldn't become smaller like in L2
-                dist_matrix[i, j] = min(abs(k1 - k2), abs(k1 - 3.14 - k2), abs(k1 + 3.14 - k2))
-                #dist_matrix[i, j] = abs(k1 - k2)
-            elif metric == 'euclidean':
-                dist_matrix[i, j] = abs(k1 - k2) ** 2
-            j += 1
-        j = 0
-        i += 1
-    #vals1 = np.reshape(list(dict1.values()), (-1, 1))
-    #vals2 = np.reshape(list(dict2.values()), (-1, 1))
-    #dist_matrix *= distance.cdist(vals1, vals2, metric)
-    return dist_matrix
 
-#calculate EDM between two distributions in form of dictionaries
-def EMD(dict1, dict2):
-    print("Num pixels dict1: {}".format(sum(dict1.values())))
-    print("Num pixels dict2: {}".format(sum(dict2.values())))
-    num_of_pixels = sum(dict1.values())
-    dist_matrix = make_distance_matrix(dict1, dict2, metric='euclidean')
-    distrib_walls_lines = np.reshape(list(dict1.values()), (-1, 1))
-    distrib_walls_corrected_lines = np.reshape(list(dict2.values()), (-1, 1))
-    distrib_walls_lines = distrib_walls_lines.flatten().astype('float64')
-    distrib_walls_corrected_lines = distrib_walls_corrected_lines.flatten().astype('float64')
-    emd, flow = pyemd.emd_with_flow(distrib_walls_lines, distrib_walls_corrected_lines, dist_matrix)
-    #flow = np.array(flow).flatten()
-    #print("Number of pixels moved: {}".format(len(flow)))
-    emd = (emd**0.5) / num_of_pixels
-    return emd
-
-def EMD_angular(dict1, dict2):
-    print("Num pixels dict1 angular: {}".format(sum(dict1.values())))
-    print("Num pixels dict2 angular: {}".format(sum(dict2.values())))
-    num_of_walls = sum(dict1.values())
-    dist_matrix = make_distance_matrix(dict1, dict2, 'angular')
-    distrib_walls_angular = np.reshape(list(dict1.values()), (-1, 1))
-    distrib_walls_angular_corrected = np.reshape(list(dict2.values()), (-1, 1))
-    distrib_walls_angular = distrib_walls_angular.flatten().astype('float64')
-    distrib_walls_angular_corrected = distrib_walls_angular_corrected.flatten().astype('float64')
-    emd, flow = pyemd.emd_with_flow(distrib_walls_angular, distrib_walls_angular_corrected, dist_matrix)
-    emd = emd / num_of_walls
-    return emd
 
 def main():
     rose1, par1 = rose_single_action()
@@ -243,16 +195,16 @@ def main():
     v = list(distrib_walls_corrected_lines.keys())
     u_weights = list(distrib_walls_lines.values())
     v_weights = list(distrib_walls_corrected_lines.values())
-    emd = wasserstein_distance(u, v, u_weights, v_weights)
-    """"
+    emd_wass = wasserstein_distance(u, v, u_weights, v_weights)
     u_angular = list(distrib_walls_angular.keys())
     v_angular = list(distrib_walls_angular_corrected_lines.keys())
     u_angular_weights = list(distrib_walls_angular.values())
     v_angular_weights = list(distrib_walls_angular_corrected_lines.values())
-    emd_angulars = wasserstein_distance(u_angular, v_angular, u_angular_weights, v_angular_weights)
-    """
-    emd_angular = EMD_angular(distrib_walls_angular, distrib_walls_angular_corrected_lines)
+    emd_angular_wass = wasserstein_distance(u_angular, v_angular, u_angular_weights, v_angular_weights)
+    emd = EMD(distrib_walls_lines, distrib_walls_corrected_lines, metric='L2')
+    emd_angular = EMD(distrib_walls_angular, distrib_walls_angular_corrected_lines, metric='angular')
     print("EMD: {}".format(emd))
+    print("EMD Wass: {}".format(emd_wass))
     print("EMD walls directions: {}".format(emd_angular))
 if __name__ == '__main__':
     main()

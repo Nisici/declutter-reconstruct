@@ -13,35 +13,45 @@ from sklearn.metrics import jaccard_score
 import os
 from util.disegna import draw_contour
 from util.layout import external_contour
+import pyemd
 
-#calculate EDM between two distributions in form of dictionaries dict[num_of_pix_walls] = distance
-# distance matrix built using L2 distance, emd normalized dividing by total number of pixels
-def EMD_walls_distances(dict1, dict2):
-    print("Num pixels dict1: {}".format(sum(dict1.values())))
-    print("Num pixels dict2: {}".format(sum(dict2.values())))
-    num_of_pixels = sum(dict1.values())
-    dist_matrix = make_distance_matrix(dict1, dict2, metric='euclidean')
-    distrib_walls_lines = np.reshape(list(dict1.values()), (-1, 1))
-    distrib_walls_corrected_lines = np.reshape(list(dict2.values()), (-1, 1))
-    distrib_walls_lines = distrib_walls_lines.flatten().astype('float64')
-    distrib_walls_corrected_lines = distrib_walls_corrected_lines.flatten().astype('float64')
-    emd, flow = pyemd.emd_with_flow(distrib_walls_lines, distrib_walls_corrected_lines, dist_matrix)
-    emd = (emd**0.5) / num_of_pixels
-    return emd
+def make_distance_matrix(dict1, dict2, metric='L2'):
+    dist_matrix = np.zeros((len(dict1), len(dict1)), dtype='float64')
+    i = 0
+    j = 0
+    # give weights based on |k1 - k2|
+    for k1, v1 in dict1.items():
+        for k2, v2 in dict2.items():
+            if metric == 'angular':
+                # L1 because small values shouldn't become smaller like in L2
+                dist_matrix[i, j] = min(abs(k1 - k2), abs(k1 - 3.14 - k2), abs(k1 + 3.14 - k2))
+                #dist_matrix[i, j] = abs(k1 - k2)
+            elif metric == 'L2':
+                dist_matrix[i, j] = abs(k1 - k2) ** 2
+            elif metric == 'L1':
+                dist_matrix[i, j] = abs(k1 - k2)
+            j += 1
+        j = 0
+        i += 1
+    #vals1 = np.reshape(list(dict1.values()), (-1, 1))
+    #vals2 = np.reshape(list(dict2.values()), (-1, 1))
+    #dist_matrix *= distance.cdist(vals1, vals2, metric)
+    return dist_matrix
 
-#calculate EDM between two distributions in form of dictionaries dict[num_of_walls] = direction
-# distance matrix built using L1 angle distance, emd normalized dividing by total number of walls
-def EMD_walls_directions(dict1, dict2):
-    print("Num pixels dict1 angular: {}".format(sum(dict1.values())))
-    print("Num pixels dict2 angular: {}".format(sum(dict2.values())))
-    num_of_walls = sum(dict1.values())
-    dist_matrix = make_distance_matrix(dict1, dict2, 'angular')
-    distrib_walls_angular = np.reshape(list(dict1.values()), (-1, 1))
-    distrib_walls_angular_corrected = np.reshape(list(dict2.values()), (-1, 1))
-    distrib_walls_angular = distrib_walls_angular.flatten().astype('float64')
-    distrib_walls_angular_corrected = distrib_walls_angular_corrected.flatten().astype('float64')
-    emd, flow = pyemd.emd_with_flow(distrib_walls_angular, distrib_walls_angular_corrected, dist_matrix)
-    emd = emd / num_of_walls
+# calculate EDM between two distributions in form of dictionaries e.g.: dict[distance] = number_of_pixels
+# distance matrix built using L1,L2 or angular distance (that is L1 but considering distances betweenangles),
+# emd is normalized dividing by the total number of points which should be the same for both dictionaries.
+def EMD(dict1, dict2, metric='L2'):
+    print("Num elems dict1: {}".format(sum(dict1.values())))
+    print("Num elems dict2: {}".format(sum(dict2.values())))
+    num_of_elems = sum(dict1.values())
+    dist_matrix = make_distance_matrix(dict1, dict2, metric)
+    distrib1 = np.array(list(dict1.values()), dtype='float64')
+    distrib2 = np.array(list(dict2.values()), dtype='float64')
+    emd, flow = pyemd.emd_with_flow(distrib1, distrib2, dist_matrix)
+    if metric == 'L2':
+        emd = emd ** 0.5
+    emd = emd / num_of_elems
     return emd
 
 def distance_point_line(line, point_x, point_y):

@@ -7,7 +7,7 @@ from PIL import Image
 import numpy as np
 from util.feature_correction import manhattan_directions, correct_lines
 from util.disegna import draw_extended_lines, draw_walls
-from util.map_evaluation import  distance_heat_map, pixels_walls_distance_distribution, walls_directions_distribution
+from util.map_evaluation import  distance_heat_map, pixels_walls_distance_distribution, walls_directions_distribution, EMD
 import os
 import argparse
 import parameters as par
@@ -17,7 +17,6 @@ import FFT_MQ as fft
 import minibatch
 from matplotlib.ticker import MaxNLocator
 import re
-import runDistribution
 import pyemd
 import util.disegna as dsg
 
@@ -111,6 +110,17 @@ def rose_walls_angular_distributions(rose, par):
             distrib_walls_corrected_angular[k] = 0
     return distrib_walls_angular, distrib_walls_corrected_angular
 
+def save_distribution_plot(union_distrib, filepath, name=""):
+    plt.close()
+    plt.figure()
+    keys = list(union_distrib.keys())
+    values = list(union_distrib.values())
+    plt.bar(keys, values, width=0.2)
+    plt.xlabel("Distance")
+    plt.ylabel("Number of walls")
+    plt.savefig(os.path.join(filepath, "histogram" + name + '.png'))
+    plt.close()
+
 def evaluate_single_map(paths, parameters_object):
     try:
         rose = start_main(parameters_object, paths)
@@ -127,47 +137,26 @@ def evaluate_single_map(paths, parameters_object):
                       dirs)
     degrees = abs(dirs[0] - dirs[1]) * 180 / np.pi
 
-    #CALCULATE EDM
+    #CALCULATE EMD
     distrib_walls_lines, distrib_walls_corrected_lines = rose_walls_distances_distributions(rose, rose.param_obj)
     distrib_walls_angular, distrib_walls_angular_corrected_lines = rose_walls_angular_distributions(rose, rose.param_obj)
-    runDistribution.save_distribution_plot(distrib_walls_lines, filepath=rose.filepath)
-    runDistribution.save_distribution_plot(distrib_walls_corrected_lines, filepath=rose.filepath,
-                                           name="corrected-lines-")
-    runDistribution.save_distribution_plot(distrib_walls_angular, rose.filepath, 'angular-')
-    runDistribution.save_distribution_plot(distrib_walls_angular_corrected_lines, rose.filepath, "angular-corrected-lines-")
-    #dist_matrix = make_distance_matrix(distrib_walls_lines, distrib_walls_corrected_lines)
-    #distrib_walls_lines = np.array(list(distrib_walls_lines.values()), dtype='float64')
-    #distrib_walls_corrected_lines = np.array(list(distrib_walls_corrected_lines.values()), dtype='float64')
-    #EMD, flow = pyemd.emd_with_flow(distrib_walls_lines, distrib_walls_corrected_lines, dist_matrix)
-    #flow = np.array(flow).flatten()
-    #print("Number of pixels moved: {}".format(len(flow)))
-    #EMD = avg_dist_walls_manhattan_lines * EMD / len(flow)
-    #print("EMD value: {}".format(EMD))
-    u = list(distrib_walls_lines.keys())
-    v = list(distrib_walls_corrected_lines.keys())
-    u_weights = list(distrib_walls_lines.values())
-    v_weights = list(distrib_walls_corrected_lines.values())
-    """
-    u_angular = list(distrib_walls_angular.keys())
-    v_angular = list(distrib_walls_angular_corrected_lines.keys())
-    u_angular_weights = list(distrib_walls_angular.values())
-    v_angular_weights = list(distrib_walls_angular_corrected_lines.values())
-    emd_angular = wasserstein_distance(u_angular, v_angular, u_angular_weights, v_angular_weights)
-    """
-    emd_angular = runDistribution.EMD_angular(distrib_walls_angular, distrib_walls_angular_corrected_lines)
-    EMD = runDistribution.EMD(distrib_walls_lines, distrib_walls_corrected_lines)
-    #EMD = EMD * avg_dist_walls_manhattan_lines
-    #EMD = wasserstein_distance(u, v, u_weights, v_weights)
-    print("EMD: {}".format(EMD))
-    print("EMD angular: {}".format(emd_angular))
+    save_distribution_plot(distrib_walls_lines, rose.filepath, '-distances')
+    save_distribution_plot(distrib_walls_corrected_lines, filepath=rose.filepath,
+                                           name="-distances-corrected")
+    save_distribution_plot(distrib_walls_angular, rose.filepath, '-angular')
+    save_distribution_plot(distrib_walls_angular_corrected_lines, rose.filepath, "-angular-corrected")
+    emd_walls_angles = EMD(distrib_walls_angular, distrib_walls_angular_corrected_lines, metric='angular')
+    emd_walls_distances = EMD(distrib_walls_lines, distrib_walls_corrected_lines, metric='L2')
+    print("EMD walls distances: {}".format(emd_walls_distances))
+    print("EMD walls directions: {}".format(emd_walls_angles))
 
     with open(os.path.join(rose.filepath, "evaluation.txt"), 'w') as file:
         file.write("Degrees: {}\n".format(degrees))
         file.write("Avg dist wall lines: {}\n".format(avg_dist_walls_lines))
         file.write("Avg dist wall manhattan lines: {}\n".format(avg_dist_walls_manhattan_lines))
-        file.write("EMD wall distances: {}\n".format(EMD))
-        file.write("EMD angular: {}\n".format(emd_angular))
-    return dirs, avg_dist_walls_lines, avg_dist_walls_manhattan_lines, EMD, emd_angular
+        file.write("EMD wall distances: {}\n".format(emd_walls_distances))
+        file.write("EMD angular: {}\n".format(emd_walls_angles))
+    return dirs, avg_dist_walls_lines, avg_dist_walls_manhattan_lines, emd_walls_distances, emd_walls_angles
 
 def main():
     # ----------------PARAMETERS OBJECTS------------------------
@@ -193,13 +182,11 @@ def main():
         parameters_object.bormann = False
 
     # saving the output folder where the output is saved
-    make_folder('data/OUTPUT', map_folder)
-    make_folder(os.path.join('data/OUTPUT/', map_folder), map_name)
-    paths.path_folder_output = os.path.join('./data/OUTPUT/', map_folder, map_name)
-
+    make_folder('data/', 'OUTPUT')
     params = get_params()
     parameters_object.filter_level, parameters_object.sogliaLateraleClusterMura = params.filter, params.cluster
 
+    #APPLY ROSE ONLY TO ONE MAP
     if params.single:
         make_folder('data/OUTPUT', 'SINGLEMAP')
         paths.path_folder_output = './data/OUTPUT/SINGLEMAP'
@@ -210,6 +197,10 @@ def main():
 
     #APPLY ROSE TO EVERY MAP IN DIRECTORY
     else:
+        make_folder('data/OUTPUT', map_folder)
+        make_folder(os.path.join('data/OUTPUT/', map_folder), map_name)
+        paths.path_folder_output = os.path.join('./data/OUTPUT/', map_folder, map_name)
+
         directions = []
         distances = []
         distances_manhattan = []
@@ -262,8 +253,8 @@ def main():
         plot_incremental_vals(dirs_diff_manh, plots_path, "directions", labels)
         plot_incremental_vals(distances, plots_path, "wall_distances", labels)
         plot_incremental_vals(distances_manhattan, plots_path, "wall_distances_manhattan", labels)
-        plot_incremental_vals(metrics, plots_path, "EDM", labels)
-        plot_incremental_vals(edms_angular, plots_path, "edm-angular", labels)
+        plot_incremental_vals(metrics, plots_path, "emd-walls-distances", labels)
+        plot_incremental_vals(edms_angular, plots_path, "emd-walls-directions", labels)
 
 
 
