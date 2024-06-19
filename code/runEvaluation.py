@@ -7,7 +7,7 @@ from PIL import Image
 import numpy as np
 from util.feature_correction import manhattan_directions, correct_lines
 from util.disegna import draw_extended_lines, draw_walls
-from util.map_evaluation import jaccard_idx, map_metric, distance_heat_map, map_metric_manhattan
+from util.map_evaluation import  distance_heat_map, pixels_walls_distance_distribution, walls_directions_distribution
 import os
 import argparse
 import parameters as par
@@ -17,6 +17,11 @@ import FFT_MQ as fft
 import minibatch
 from matplotlib.ticker import MaxNLocator
 import re
+import runDistribution
+import pyemd
+import util.disegna as dsg
+
+
 """"
 Evaluate maps using rose, calculate: main directions, avg distance between walls and the extended lines, 
 avg distance between walls and manhattan extended lines (90°), metric (not yet finished).
@@ -75,6 +80,36 @@ def dirs_diff_manhattan(dirs):
 def natural_sort_key(s):
     return [int(text) if text.isdigit() else text.lower() for text in re.split('([0-9]+)', s)]
 
+#returns union distribution of pixels wall distances to lines and wall distances to corrected lines
+def rose_walls_distances_distributions(rose, par):
+    dirs = [par.comp[0], par.comp[2]]
+    corrected_lines = correct_lines(rose.extended_segments, manhattan_directions(dirs))
+    distrib_walls_dist = pixels_walls_distance_distribution(rose.walls, rose.extended_segments, rose.original_binary_map)
+    distrib_walls_dist_corrected_lines = pixels_walls_distance_distribution(rose.walls, corrected_lines, rose.original_binary_map)
+    for k in distrib_walls_dist_corrected_lines.keys():
+        if k not in distrib_walls_dist.keys():
+            distrib_walls_dist[k] = 0
+    for k in distrib_walls_dist.keys():
+        if k not in distrib_walls_dist_corrected_lines.keys():
+            distrib_walls_dist_corrected_lines[k] = 0
+    return distrib_walls_dist, distrib_walls_dist_corrected_lines
+
+# make a dictionary representing the union distribution of walls directions and the dictionary representing
+# the union distribution of corrected walls (using manhattan directions) directions
+def rose_walls_angular_distributions(rose, par):
+    dirs = [par.comp[0], par.comp[2]]
+    manhattan_dirs = manhattan_directions(dirs)
+    corrected_walls = correct_lines(rose.walls, manhattan_dirs)
+    dsg.draw_walls(corrected_walls, "corrected-walls", rose.size, filepath=rose.filepath)
+    distrib_walls_angular = walls_directions_distribution(rose.walls, rose.original_binary_map)
+    distrib_walls_corrected_angular = walls_directions_distribution(corrected_walls, rose.original_binary_map)
+    for k in distrib_walls_corrected_angular.keys():
+        if k not in distrib_walls_angular.keys():
+            distrib_walls_angular[k] = 0
+    for k in distrib_walls_angular.keys():
+        if k not in distrib_walls_corrected_angular.keys():
+            distrib_walls_corrected_angular[k] = 0
+    return distrib_walls_angular, distrib_walls_corrected_angular
 
 def evaluate_single_map(paths, parameters_object):
     try:
@@ -84,26 +119,55 @@ def evaluate_single_map(paths, parameters_object):
     dirs = [rose.param_obj.comp[0], rose.param_obj.comp[2]]
     manhattan_dirs = manhattan_directions(dirs)
     manhattan_lines = correct_lines(rose.extended_segments, manhattan_dirs)
-    corrected_walls = correct_lines(rose.walls, manhattan_dirs)
     draw_extended_lines(manhattan_lines, rose.walls, "corrected_lines", rose.size, filepath=rose.filepath)
-    draw_walls(corrected_walls, "corrected_walls", rose.size, filepath=rose.filepath)
     avg_dist_walls_lines = avg_distance_walls_lines(rose.walls, rose.extended_segments, rose.original_binary_map, dirs)
     avg_dist_walls_manhattan_lines = avg_distance_walls_lines(rose.walls, manhattan_lines,
                                                               rose.original_binary_map, manhattan_dirs,)
-    avg_corrected_walls_distance = avg_distance_walls_lines(corrected_walls, manhattan_lines, rose.original_binary_map, manhattan_dirs)
-    metric = map_metric(rose)
     distance_heat_map(rose.extended_segments, rose.walls, rose.filepath, rose.original_map, rose.original_binary_map,
                       dirs)
     degrees = abs(dirs[0] - dirs[1]) * 180 / np.pi
-    metric_manhattan = map_metric_manhattan(rose, manhattan_lines, manhattan_dirs)
+
+    #CALCULATE EDM
+    distrib_walls_lines, distrib_walls_corrected_lines = rose_walls_distances_distributions(rose, rose.param_obj)
+    distrib_walls_angular, distrib_walls_angular_corrected_lines = rose_walls_angular_distributions(rose, rose.param_obj)
+    runDistribution.save_distribution_plot(distrib_walls_lines, filepath=rose.filepath)
+    runDistribution.save_distribution_plot(distrib_walls_corrected_lines, filepath=rose.filepath,
+                                           name="corrected-lines-")
+    runDistribution.save_distribution_plot(distrib_walls_angular, rose.filepath, 'angular-')
+    runDistribution.save_distribution_plot(distrib_walls_angular_corrected_lines, rose.filepath, "angular-corrected-lines-")
+    #dist_matrix = make_distance_matrix(distrib_walls_lines, distrib_walls_corrected_lines)
+    #distrib_walls_lines = np.array(list(distrib_walls_lines.values()), dtype='float64')
+    #distrib_walls_corrected_lines = np.array(list(distrib_walls_corrected_lines.values()), dtype='float64')
+    #EMD, flow = pyemd.emd_with_flow(distrib_walls_lines, distrib_walls_corrected_lines, dist_matrix)
+    #flow = np.array(flow).flatten()
+    #print("Number of pixels moved: {}".format(len(flow)))
+    #EMD = avg_dist_walls_manhattan_lines * EMD / len(flow)
+    #print("EMD value: {}".format(EMD))
+    u = list(distrib_walls_lines.keys())
+    v = list(distrib_walls_corrected_lines.keys())
+    u_weights = list(distrib_walls_lines.values())
+    v_weights = list(distrib_walls_corrected_lines.values())
+    """
+    u_angular = list(distrib_walls_angular.keys())
+    v_angular = list(distrib_walls_angular_corrected_lines.keys())
+    u_angular_weights = list(distrib_walls_angular.values())
+    v_angular_weights = list(distrib_walls_angular_corrected_lines.values())
+    emd_angular = wasserstein_distance(u_angular, v_angular, u_angular_weights, v_angular_weights)
+    """
+    emd_angular = runDistribution.EMD_angular(distrib_walls_angular, distrib_walls_angular_corrected_lines)
+    EMD = runDistribution.EMD(distrib_walls_lines, distrib_walls_corrected_lines)
+    #EMD = EMD * avg_dist_walls_manhattan_lines
+    #EMD = wasserstein_distance(u, v, u_weights, v_weights)
+    print("EMD: {}".format(EMD))
+    print("EMD angular: {}".format(emd_angular))
+
     with open(os.path.join(rose.filepath, "evaluation.txt"), 'w') as file:
         file.write("Degrees: {}\n".format(degrees))
         file.write("Avg dist wall lines: {}\n".format(avg_dist_walls_lines))
         file.write("Avg dist wall manhattan lines: {}\n".format(avg_dist_walls_manhattan_lines))
-        file.write("Metric val: {}\n".format(metric))
-        file.write("Metric manhattan val: {}\n".format(metric_manhattan))
-        file.write("Corrected walls distance: {}".format(avg_corrected_walls_distance))
-    return dirs, avg_dist_walls_lines, avg_dist_walls_manhattan_lines, metric, metric_manhattan, avg_corrected_walls_distance
+        file.write("EMD wall distances: {}\n".format(EMD))
+        file.write("EMD angular: {}\n".format(emd_angular))
+    return dirs, avg_dist_walls_lines, avg_dist_walls_manhattan_lines, EMD, emd_angular
 
 def main():
     # ----------------PARAMETERS OBJECTS------------------------
@@ -150,9 +214,8 @@ def main():
         distances = []
         distances_manhattan = []
         metrics = []
-        metrics_manhattan = []
-        corrected_walls_distances = []
         labels = [] # for plotting
+        edms_angular = []
         make_folder(paths.path_folder_output, "plots-stats")
         for root, dirs, files in os.walk(paths.path_folder_input):
             for file in sorted(files, key=natural_sort_key):
@@ -163,7 +226,7 @@ def main():
                     print('NOT AN IMAGE')
                 else:
                     try:
-                        direction, avg_dist_walls_lines, avg_dist_walls_manhattan_lines, metric, metric_manhattan, avg_corrected_walls_distance\
+                        direction, avg_dist_walls_lines, avg_dist_walls_manhattan_lines, EMD, edm_angular \
                             = evaluate_single_map(paths, parameters_object)
                     except Exception:
                         print("Can't find directions")
@@ -171,9 +234,8 @@ def main():
                     directions.append(direction)
                     distances.append(avg_dist_walls_lines)
                     distances_manhattan.append(avg_dist_walls_manhattan_lines)
-                    metrics.append(metric)
-                    metrics_manhattan.append(metric_manhattan)
-                    corrected_walls_distances.append(avg_corrected_walls_distance)
+                    metrics.append(EMD)
+                    edms_angular.append(edm_angular)
                     label = re.findall(r'\d+', file)[-1]
                     labels.append(label)
         time = str(datetime.datetime.now())
@@ -190,23 +252,20 @@ def main():
             varianceWL = np.std(distances)
             meanWM = np.mean(distances_manhattan)
             varianceWM = np.std(distances_manhattan)
-            meanM = np.mean(metrics)
-            varianceM = np.std(metrics)
             file.write("Degree diff manhattan mean: {}\n".format(meanD))
             file.write("Degrees diff manhattan variance: {}\n".format(varianceD))
             file.write("Avg dist wall lines mean: {}\n".format(meanWL))
             file.write("Avg dist wall lines variance: {}\n".format(varianceWL))
             file.write("Avg dist wall manhattan lines mean: {}\n".format(meanWM))
             file.write("Avg dist wall manhattan lines variance: {}\n".format(varianceWM))
-            file.write("Metric mean: {}\n".format(meanM))
-            file.write("Metric variance: {}\n".format(varianceM))
         dirs_diff_manh = dirs_diff_manhattan(directions)
         plot_incremental_vals(dirs_diff_manh, plots_path, "directions", labels)
         plot_incremental_vals(distances, plots_path, "wall_distances", labels)
         plot_incremental_vals(distances_manhattan, plots_path, "wall_distances_manhattan", labels)
-        plot_incremental_vals(corrected_walls_distances, plots_path, "corrected_walls_distances", labels)
-        #plot_incremental_vals(metrics, plots_path, "metrics", labels)
-        #plot_incremental_vals(metrics_manhattan, plots_path, "metrics_awd_manhattan", labels)
+        plot_incremental_vals(metrics, plots_path, "EDM", labels)
+        plot_incremental_vals(edms_angular, plots_path, "edm-angular", labels)
+
+
 
 def start_main(parameters_object, paths):
 
