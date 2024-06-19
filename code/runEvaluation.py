@@ -15,15 +15,13 @@ import datetime
 import shutil
 import FFT_MQ as fft
 import minibatch
-from matplotlib.ticker import MaxNLocator
 import re
 import pyemd
-import util.disegna as dsg
 
 
 """"
 Evaluate maps using rose, calculate: main directions, avg distance between walls and the extended lines, 
-avg distance between walls and manhattan extended lines (90°), metric (not yet finished).
+avg distance between walls and manhattan extended lines (90°), emd.
 You can evaluate a single map passing the command line argument --single True. This will make a file evaluate.txt
 with the stats, heatmap_on_original.png to see the distance between walls and lines colored on the map (blue = max dist,
 red = min dist), corrected_lines.png shows how the extended lines have been corrected to be manhattan.
@@ -99,7 +97,7 @@ def rose_walls_angular_distributions(rose, par):
     dirs = [par.comp[0], par.comp[2]]
     manhattan_dirs = manhattan_directions(dirs)
     corrected_walls = correct_lines(rose.walls, manhattan_dirs)
-    dsg.draw_walls(corrected_walls, "corrected-walls", rose.size, filepath=rose.filepath)
+    draw_walls(corrected_walls, "corrected-walls", rose.size, filepath=rose.filepath)
     distrib_walls_angular = walls_directions_distribution(rose.walls, rose.original_binary_map)
     distrib_walls_corrected_angular = walls_directions_distribution(corrected_walls, rose.original_binary_map)
     for k in distrib_walls_corrected_angular.keys():

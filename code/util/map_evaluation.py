@@ -19,7 +19,6 @@ def make_distance_matrix(dict1, dict2, metric='L2'):
     dist_matrix = np.zeros((len(dict1), len(dict1)), dtype='float64')
     i = 0
     j = 0
-    # give weights based on |k1 - k2|
     for k1, v1 in dict1.items():
         for k2, v2 in dict2.items():
             if metric == 'angular':
@@ -33,17 +32,12 @@ def make_distance_matrix(dict1, dict2, metric='L2'):
             j += 1
         j = 0
         i += 1
-    #vals1 = np.reshape(list(dict1.values()), (-1, 1))
-    #vals2 = np.reshape(list(dict2.values()), (-1, 1))
-    #dist_matrix *= distance.cdist(vals1, vals2, metric)
     return dist_matrix
 
 # calculate EDM between two distributions in form of dictionaries e.g.: dict[distance] = number_of_pixels
 # distance matrix built using L1,L2 or angular distance (that is L1 but considering distances betweenangles),
 # emd is normalized dividing by the total number of points which should be the same for both dictionaries.
 def EMD(dict1, dict2, metric='L2'):
-    print("Num elems dict1: {}".format(sum(dict1.values())))
-    print("Num elems dict2: {}".format(sum(dict2.values())))
     num_of_elems = sum(dict1.values())
     dist_matrix = make_distance_matrix(dict1, dict2, metric)
     distrib1 = np.array(list(dict1.values()), dtype='float64')
